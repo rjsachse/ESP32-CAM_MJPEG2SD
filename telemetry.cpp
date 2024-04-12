@@ -32,23 +32,40 @@ static bool checkI2C(byte addr);
 
 // example code for BMP280 and MPU9250 I2C sensors on GY-91 board
 //#define USE_GY91 // uncomment to support GY-91 board (BMP280 + MPU9250)
+//#define USE_BMP280 // uncomment to support GY-BMP280 board (BMP280)
+#define USE_BME280 // uncomment to support GY-BME280 board (BME280)
 
-// user defined header row, first field is always Time, row must end with \n
-#define TELEHEADER "Time,Temperature (C),Pressure (mb),Altitude (m),Heading,Pitch,Roll\n"
 #define BUF_OVERFLOW 100 // set to be max size of formatted telemetry row
 
 // if require I2C, define which pins to use for I2C bus
 // if pins not correctly defined for board, spurious results will occur
-#define I2C_SDA 20
-#define I2C_SCL 21
+#define I2C_SDA 8
+#define I2C_SCL 9
 
-#ifdef USE_GY91
+#if defined(USE_BMP280)
+  #define USE_BMx280
+  // user defined header row, first field is always Time, row must end with \n
+  #define TELEHEADER "Time,Temperature (C),Pressure (mb),Altitude (m)\n"
+#elif defined(USE_BME280)
+  #define USE_BMx280
+  // user defined header row, first field is always Time, row must end with \n
+  #define TELEHEADER "Time,Temperature (C),Humidity (%),Pressure (mb),Altitude (m)\n"
+#elif defined(USE_GY91)
+  #define USE_BMx280
+  #define TELEHEADER "Time,Temperature (C),Pressure (mb),Altitude (m),Heading,Pitch,Roll\n"
+#else
+  #define TELEHEADER "\n"
+#endif
+
+#ifdef USE_BMx280
 #include <BMx280I2C.h>
-#define BMP_ADDRESS 0x76 
+#define BMx_ADDRESS 0x76 
 #define STD_PRESSURE 1013.25 // standard pressure mb at sea level
 #define DEGREE_SYMBOL "\xC2\xB0"
-BMx280I2C bmp280(BMP_ADDRESS);
+BMx280I2C bmx280(BMx_ADDRESS);
+#endif
 
+#ifdef USE_GY91
 #include "MPU9250.h"
 // accel axis orientation on GY-91:                      
 // - X : short side (pitch)
@@ -63,57 +80,77 @@ MPU9250 mpu9250;
 static bool setupSensors() {
   // setup required sensors
   bool res = true;
-#ifdef USE_GY91
-  Wire.begin(I2C_SDA, I2C_SCL); // join I2C bus as master 
-  LOG_INF("I2C started at %dkHz", Wire.getClock() / 1000);
-  if (!scanI2C()) return false;
+  #ifdef USE_BMx280
+    Wire.begin(I2C_SDA, I2C_SCL); // join I2C bus as master 
+    LOG_INF("I2C started at %dkHz", Wire.getClock() / 1000);
+    if (!scanI2C()) return false;
 
-  if (bmp280.begin()) {
-    LOG_INF("BMP280 available");
-    // set defaults
-    bmp280.resetToDefaults();
-    bmp280.writeOversamplingPressure(BMx280MI::OSRS_P_x16);
-    bmp280.writeOversamplingTemperature(BMx280MI::OSRS_T_x16);
-  } else {
-    LOG_WRN("BMP280 not available at address 0x%02X", BMP_ADDRESS);
-    return false;
-  } 
-  
-  if (mpu9250.setup(MPU_ADDRESS)) {
-    mpu9250.setMagneticDeclination(LOCAL_MAG_DECLINATION);
-    mpu9250.selectFilter(QuatFilterSel::MADGWICK);
-    mpu9250.setFilterIterations(15);
-    LOG_INF("MPU9250 calibrating, leave still");
-    mpu9250.calibrateAccelGyro();
-//    LOG_INF("Move MPU9250 in a figure of eight until done");
-//    delay(2000);
-//    mpu9250.calibrateMag();
-    LOG_INF("MPU9250 available");
-  }
-  else {
-    LOG_WRN("MPU9250 not available at address 0x%02X", MPU_ADDRESS);
-    return false;
-  }
-#endif
+    if (bmx280.begin()) {
+      LOG_INF("BMx280 available");
+      // set defaults
+      bmx280.resetToDefaults();
+      bmx280.writeOversamplingPressure(BMx280MI::OSRS_P_x16);
+      bmx280.writeOversamplingTemperature(BMx280MI::OSRS_T_x16);
+      //if sensor is a BME280, set an oversampling setting for humidity measurements.
+      if (bmx280.isBME280()) {
+        bmx280.writeOversamplingHumidity(BMx280MI::OSRS_H_x16);
+      }
+    } else {
+      LOG_WRN("BMX280 not available at address 0x%02X", BMx_ADDRESS);
+      return false;
+    }
+  #endif
+    
+  #ifdef USE_GY91
+    if (mpu9250.setup(MPU_ADDRESS)) {
+      mpu9250.setMagneticDeclination(LOCAL_MAG_DECLINATION);
+      mpu9250.selectFilter(QuatFilterSel::MADGWICK);
+      mpu9250.setFilterIterations(15);
+      LOG_INF("MPU9250 calibrating, leave still");
+      mpu9250.calibrateAccelGyro();
+  //    LOG_INF("Move MPU9250 in a figure of eight until done");
+  //    delay(2000);
+  //    mpu9250.calibrateMag();
+      LOG_INF("MPU9250 available");
+    }
+    else {
+      LOG_WRN("MPU9250 not available at address 0x%02X", MPU_ADDRESS);
+      return false;
+    }
+  #endif
   return res; 
 }
 
 static void getSensorData() {
   // get sensor data and format as csv row & srt entry in buffers
-#ifdef USE_GY91
-  bmp280.measure();
-  if (bmp280.hasValue()) {
-    float bmpPressure = bmp280.getPressure() * 0.01;  // pascals to mb/hPa
-    float bmpAltitude = 44330.0 * (1.0 - pow(bmpPressure / STD_PRESSURE, 1.0 / 5.255)); // altitude in meters
-    highPoint[0] += sprintf(teleBuf[0] + highPoint[0], ",%0.1f,%0.1f,%0.1f", bmp280.getTemperature(), bmpPressure, bmpAltitude);
-    highPoint[1] += sprintf(teleBuf[1] + highPoint[1], "  %0.1fC  %0.1fmb  %0.1fm", bmp280.getTemperature(), bmpPressure, bmpAltitude);
-  } else for (int i=0; i< 2; i++) highPoint[i] += sprintf(teleBuf[i] + highPoint[i], ",-,-,-");
-  
-  if (mpu9250.update()) {
-    highPoint[0] += sprintf(teleBuf[0] + highPoint[0], ",%0.1f,%0.1f,%0.1f", mpu9250.getYaw(), mpu9250.getPitch(), mpu9250.getRoll()); 
-    highPoint[1] += sprintf(teleBuf[1] + highPoint[1], "  %0.1f  %0.1f  %0.1f", mpu9250.getYaw(), mpu9250.getPitch(), mpu9250.getRoll()); 
-  }
-#endif
+  #ifdef USE_GY91
+    if (mpu9250.update()) {
+      highPoint[0] += sprintf(teleBuf[0] + highPoint[0], "%0.1f,%0.1f,%0.1f,", mpu9250.getYaw(), mpu9250.getPitch(), mpu9250.getRoll()); 
+      highPoint[1] += sprintf(teleBuf[1] + highPoint[1], "  %0.1f  %0.1f  %0.1f", mpu9250.getYaw(), mpu9250.getPitch(), mpu9250.getRoll()); 
+    }
+  #endif
+  #ifdef USE_BMx280
+    bmx280.measure();
+    while (!bmx280.hasValue());
+    if (bmx280.hasValue()) {
+      float bmxPressure = bmx280.getPressure() * 0.01;  // pascals to mb/hPa
+      float bmxAltitude = 44330.0 * (1.0 - pow(bmxPressure / STD_PRESSURE, 1.0 / 5.255)); // altitude in meters
+      if (bmx280.isBME280()) {
+        highPoint[0] += sprintf(teleBuf[0] + highPoint[0], "%0.1f,%0.1f,%0.1f,%0.1f,", bmx280.getTemperature(), bmx280.getHumidity(), bmxPressure, bmxAltitude);
+        highPoint[1] += sprintf(teleBuf[1] + highPoint[1], "  %0.1fC  %0.1fRH  %0.1fhPa  %0.1fm", bmx280.getTemperature(), bmx280.getHumidity(), bmxPressure, bmxAltitude);
+        #if INCLUDE_MQTT
+          if (mqtt_active) {
+            sprintf(jsonBuff, "{\"Temp\":\"%s\", \"TIME\":\"%s\"}", bmx280.getTemperature(), esp_log_system_timestamp());
+            mqttPublish(jsonBuff);
+          }
+        #endif
+      } else {
+        highPoint[0] += sprintf(teleBuf[0] + highPoint[0], "%0.1f,%0.1f,%0.1f,", bmx280.getTemperature(), bmxPressure, bmxAltitude);
+        highPoint[1] += sprintf(teleBuf[1] + highPoint[1], "  %0.1fC  %0.1fmb  %0.1fm", bmx280.getTemperature(), bmxPressure, bmxAltitude);
+      }
+
+    } else for (int i=0; i< 2; i++) highPoint[i] += sprintf(teleBuf[i] + highPoint[i], "-,-,-,");
+  #endif
 }
 
 /*************** LEAVE CODE BELOW AS IS ******************/

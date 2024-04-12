@@ -381,7 +381,7 @@ static void setupBatt() {
 #define RGB_BITS 24  // WS2812 has 24 bit color in RGB order
 #define LAMP_LEDC_CHANNEL 2 // Use channel not required by camera
 static bool lampInit = false;
-#if defined(CAMERA_MODEL_ESP32S3_EYE) || defined(CAMERA_MODEL_FREENOVE_ESP32S3_CAM)
+#if defined(CAMERA_MODEL_ESP32S3_EYE) || defined(CAMERA_MODEL_FREENOVE_ESP32S3_CAM) || defined(CAMERA_MODEL_XENOIONEX)
 static rmt_obj_t* rmtWS2812;
 static rmt_data_t ledData[RGB_BITS];
 #endif
@@ -398,7 +398,7 @@ static void setupLamp() {
       ledcAttachPin(lampPin, LAMP_LEDC_CHANNEL); 
       LOG_INF("Setup Lamp Led for ESP32 Cam board");
 
-#elif defined(CAMERA_MODEL_ESP32S3_EYE) || defined(CAMERA_MODEL_FREENOVE_ESP32S3_CAM)
+#elif defined(CAMERA_MODEL_ESP32S3_EYE) || defined(CAMERA_MODEL_FREENOVE_ESP32S3_CAM) || defined(CAMERA_MODEL_XENOIONEX)
       // Single WS2812 RGB high intensity led on pin 48
       rmtWS2812 = rmtInit(lampPin, true, RMT_MEM_64);
       if (rmtWS2812 == NULL) LOG_WRN("Failed to setup WS2812 with pin %u", lampPin);
@@ -429,7 +429,7 @@ void setLamp(uint8_t lampVal) {
       // set lamp brightness using PWM (0 = off, 15 = max)
      ledcWrite(LAMP_LEDC_CHANNEL, lampVal);
   
-#elif defined(CAMERA_MODEL_ESP32S3_EYE) || defined(CAMERA_MODEL_FREENOVE_ESP32S3_CAM)
+#elif defined(CAMERA_MODEL_ESP32S3_EYE) || defined(CAMERA_MODEL_FREENOVE_ESP32S3_CAM) || defined(CAMERA_MODEL_XENOIONEX)
       // Set white color and apply lampVal (0 = off, 15 = max)
       uint8_t RGB[3]; // each color is 8 bits
       lampVal = lampVal == 15 ? 255 : lampVal * 16;

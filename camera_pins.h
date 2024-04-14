@@ -348,6 +348,8 @@
 #define VSYNC_GPIO_NUM 6
 #define HREF_GPIO_NUM 7
 #define PCLK_GPIO_NUM 13
+//Use WS2810
+#define USE_WS2812
 //Define SD Pins
 #define SD_MMC_CLK 39 
 #define SD_MMC_CMD 38
@@ -427,7 +429,7 @@
 #define HREF_GPIO_NUM 12
 #define PCLK_GPIO_NUM 7
 
-#define LED_GPIO_NUM 
+#define LED_GPIO_NUM 34
 //Define SD Pins
 #define SD_MMC_CLK 42
 #define SD_MMC_CMD 39

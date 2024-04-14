@@ -53,8 +53,6 @@ static bool checkI2C(byte addr);
 #endif
 
 #ifdef USE_BMx280
-=======
-#ifdef USE_GY91
 #include <BMx280I2C.h>
 #define BMx_ADDRESS 0x76 
 #define STD_PRESSURE 1013.25 // standard pressure mb at sea level

@@ -38,11 +38,6 @@ static bool checkI2C(byte addr);
 // user defined header row, first field is always Time, row must end with \n
 #define BUF_OVERFLOW 100 // set to be max size of formatted telemetry row
 
-// if require I2C, define which pins to use for I2C bus
-// if pins not correctly defined for board, spurious results will occur
-#define I2C_SDA 8
-#define I2C_SCL 9
-
 #if defined(USE_BMP280)
   #define USE_BMx280
   // user defined header row, first field is always Time, row must end with \n

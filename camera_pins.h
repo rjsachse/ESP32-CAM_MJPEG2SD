@@ -19,6 +19,40 @@
 #define HREF_GPIO_NUM    23
 #define PCLK_GPIO_NUM    22
 
+#elif defined(CAMERA_MODEL_XENOIONEX)
+#define CAM_BOARD "CAMERA_MODEL_XENOIONEX"
+#define PWDN_GPIO_NUM    -1
+#define RESET_GPIO_NUM   -1
+#define XCLK_GPIO_NUM    1
+#define SIOD_GPIO_NUM    47
+#define SIOC_GPIO_NUM    21
+
+#define Y9_GPIO_NUM      7 //D7
+#define Y8_GPIO_NUM      15 //D6
+#define Y7_GPIO_NUM      42 //D5
+#define Y6_GPIO_NUM      16 //D4
+#define Y5_GPIO_NUM      41 //D3
+#define Y4_GPIO_NUM      17 //D2
+#define Y3_GPIO_NUM      40 //D1
+#define Y2_GPIO_NUM      39 //D0
+#define VSYNC_GPIO_NUM   45
+#define HREF_GPIO_NUM    38
+#define PCLK_GPIO_NUM    2
+
+#define SD_MMC_CLK       13
+#define SD_MMC_CMD       12
+#define SD_MMC_D0        14
+
+#define I2C_SDA 8
+#define I2C_SCL 9
+
+#define I2S_SCK 4
+#define I2S_WS 5
+#define I2S_SD 6
+
+#define USE_WS2812
+//#define LED_GPIO_NUM     48
+
 #elif defined(CAMERA_MODEL_ESP_EYE)
 #define CAM_BOARD "CAMERA_MODEL_ESP_EYE"
 #define PWDN_GPIO_NUM    -1
@@ -205,6 +239,14 @@
 #define VSYNC_GPIO_NUM    38
 #define HREF_GPIO_NUM     47
 #define PCLK_GPIO_NUM     13
+//Define SD Pins
+#define SD_MMC_CLK 7 
+#define SD_MMC_CMD 9
+#define SD_MMC_D0 8
+//Define Mic Pins
+#define I2S_SD 41
+#define I2S_WS 42
+#define I2S_SCK -1 //PDM Microphone
 
 #elif defined(CAMERA_MODEL_ESP32_CAM_BOARD)
 #define CAM_BOARD "CAMERA_MODEL_ESP32_CAM_BOARD"
@@ -306,6 +348,19 @@
 #define VSYNC_GPIO_NUM 6
 #define HREF_GPIO_NUM 7
 #define PCLK_GPIO_NUM 13
+//Use WS2810
+#define USE_WS2812
+//Define SD Pins
+#define SD_MMC_CLK 39 
+#define SD_MMC_CMD 38
+#define SD_MMC_D0 40
+//Define I2C Pins
+#define I2C_SDA 20
+#define I2C_SCL 21
+//Define Mic Pins
+#define I2S_SD 2
+#define I2S_WS 42
+#define I2S_SCK 41 //I2S Microphone
 
 #elif defined(CAMERA_MODEL_TTGO_T_CAMERA_PLUS)
 #define CAM_BOARD "CAMERA_MODEL_TTGO_T_CAMERA_PLUS"
@@ -328,6 +383,10 @@
 #define PCLK_GPIO_NUM    25
 
 #define LED_GPIO_NUM     -1
+//Define SD Pins
+#define SD_MMC_CLK 21 // SCLK
+#define SD_MMC_CMD 19 // MOSI
+#define SD_MMC_D0 22  // MISO]
 
 #elif defined(CAMERA_MODEL_DFRobot_FireBeetle2_ESP32S3) || defined(CAMERA_MODEL_DFRobot_Romeo_ESP32S3)
 #define CAM_BOARD "CAMERA_MODEL_DFRobot_ESP32S3"
@@ -371,6 +430,10 @@
 #define PCLK_GPIO_NUM 7
 
 #define LED_GPIO_NUM 34
+//Define SD Pins
+#define SD_MMC_CLK 42
+#define SD_MMC_CMD 39
+#define SD_MMC_D0 4
 
 #else
 #error "Camera model not selected"

@@ -39,17 +39,18 @@
 #define HREF_GPIO_NUM    38
 #define PCLK_GPIO_NUM    2
 
-//#define SD_MMC_CLK       13
-//#define SD_MMC_CMD       12
-//#define SD_MMC_D0        14
+#define SD_MMC_CLK       13
+#define SD_MMC_CMD       12
+#define SD_MMC_D0        14
 
-//#define I2C_SDA 8
-//#define I2C_SCL 9
+#define I2C_SDA 8
+#define I2C_SCL 9
 
-//#define I2S_SCK 4
-//#define I2S_WS 5
-//#define I2S_SD 6
+#define I2S_SCK 4
+#define I2S_WS 5
+#define I2S_SD 6
 
+#define USE_WS2812
 //#define LED_GPIO_NUM     48
 
 #elif defined(CAMERA_MODEL_ESP_EYE)

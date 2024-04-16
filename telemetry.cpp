@@ -35,9 +35,12 @@ static bool checkI2C(byte addr);
 //#define USE_BMP280 // uncomment to support GY-BMP280 board (BMP280)
 #define USE_BME280 // uncomment to support GY-BME280 board (BME280)
 
-// user defined header row, first field is always Time, row must end with \n
-#define BUF_OVERFLOW 100 // set to be max size of formatted telemetry row
+// if require I2C, define which pins to use for I2C bus
+// if pins not correctly defined for board, spurious results will occur
+#define I2C_SDA 20
+#define I2C_SCL 21
 
+// user defined header row, first field is always Time, row must end with \n
 #if defined(USE_BMP280)
   #define USE_BMx280
   // user defined header row, first field is always Time, row must end with \n
@@ -52,6 +55,7 @@ static bool checkI2C(byte addr);
 #else
   #define TELEHEADER "\n"
 #endif
+#define BUF_OVERFLOW 100 // set to be max size of formatted telemetry row
 
 #ifdef USE_BMx280
 #include <BMx280I2C.h>

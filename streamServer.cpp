@@ -18,7 +18,6 @@
 #define HDR_BUF_LEN 64
 #define END_WAIT 100
 
-static fs::FS fpv = STORAGE;
 bool forcePlayback = false; // browser playback status
 bool streamNvr = false;
 bool streamSnd = false;
@@ -49,7 +48,7 @@ static void showPlayback(httpd_req_t* req) {
   esp_err_t res = ESP_OK; 
   stopPlaying();
   forcePlayback = true;
-  if (fpv.exists(inFileName)) {
+  if (SD_MMC.exists(inFileName)) {
     if (stopPlayback) LOG_WRN("Playback refused - capture in progress");
     else {
       LOG_INF("Playback enabled (SD file selected)");
@@ -227,7 +226,7 @@ static void sustainTask(void* p) {
     ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
     uint8_t i = *(uint8_t*)p; // identify task number
     if (i == 0) {
-      if (!strcmp(sustainReq[i].activity, "download")) fileHandler(sustainReq[i].req, true); 
+      if (!strcmp(sustainReq[i].activity, "download")) fileHandler(sustainReq[i].req, true, true); 
       else if (!strcmp(sustainReq[i].activity, "playback")) showPlayback(sustainReq[i].req);
       else if (!strcmp(sustainReq[i].activity, "stream")) showStream(sustainReq[i].req, i);
     } 

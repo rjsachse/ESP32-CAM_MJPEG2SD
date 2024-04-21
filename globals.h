@@ -22,7 +22,8 @@
 #include <Preferences.h>
 #include <regex>
 #include <SD_MMC.h>
-#include <LittleFS.h>
+//#include <LittleFS.h>
+#include <FFat.h>
 #include <sstream>
 #include <Update.h>
 #include <WiFi.h>
@@ -57,6 +58,7 @@
 #define OTA_FILE_PATH DATA_DIR "/OTA" HTML_EXT
 #define COMMON_JS_PATH DATA_DIR "/common" JS_EXT 
 #define WEBDAV "/webdav"
+#define WEBDAV_DATA "/webdata"
 #define GITHUB_HOST "raw.githubusercontent.com"
 
 #define FILLSTAR "****************************************************************"
@@ -91,7 +93,7 @@ void checkMemory(const char* source = "");
 uint32_t checkStackUse(TaskHandle_t thisTask, int taskIdx);
 void debugMemory(const char* caller);
 void dateFormat(char* inBuff, size_t inBuffLen, bool isFolder);
-void deleteFolderOrFile(const char* deleteThis);
+void deleteFolderOrFile(const char* deleteThis, bool isSD);
 void devSetup();
 void doAppPing();
 void doRestart(const char* restartStr);
@@ -104,7 +106,7 @@ void externalAlert(const char* subject, const char* message);
 bool externalPeripheral(byte pinNum, uint32_t outputData = 0);
 esp_err_t extractHeaderVal(httpd_req_t *req, const char* variable, char* value);
 esp_err_t extractQueryKeyVal(httpd_req_t *req, char* variable, char* value);
-esp_err_t fileHandler(httpd_req_t* req, bool download = false);
+esp_err_t fileHandler(httpd_req_t* req, bool download = false, bool isSD = false);
 void flush_log(bool andClose = false);
 char* fmtSize (uint64_t sizeVal);
 void forceCrash();
@@ -118,11 +120,11 @@ size_t getFreeStorage();
 bool getLocalNTP();
 float getNTCcelsius(uint16_t resistance, float oldTemp);
 void goToSleep(int wakeupPin, bool deepSleep);
-bool handleWebDav(httpd_req_t* rreq);
+bool handleWebDav(httpd_req_t* rreq, bool isSD = true);
 void initStatus(int cfgGroup, int delayVal);
 void killSocket(int skt = -99);
 void listBuff(const uint8_t* b, size_t len); 
-bool listDir(const char* fname, char* jsonBuff, size_t jsonBuffLen, const char* extension);
+bool listDir(const char* fname, char* jsonBuff, size_t jsonBuffLen, const char* extension, bool isSD);
 bool loadConfig();
 void logLine();
 void logPrint(const char *fmtStr, ...);
@@ -164,6 +166,7 @@ void syncToBrowser(uint32_t browserUTC);
 bool updateConfigVect(const char* variable, const char* value);
 void updateStatus(const char* variable, const char* _value);
 esp_err_t uploadHandler(httpd_req_t *req);
+esp_err_t uploadDataHandler(httpd_req_t *req);
 void urlDecode(char* inVal);
 bool urlEncode(const char* inVal, char* encoded, size_t maxSize);
 uint32_t usePeripheral(const byte pinNum, const uint32_t receivedData);

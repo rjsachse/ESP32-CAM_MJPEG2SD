@@ -41,11 +41,13 @@ esp_err_t sendChunks(File df, httpd_req_t *req, bool endChunking) {
   return chunksize ? ESP_FAIL : ESP_OK;
 }
 
-esp_err_t fileHandler(httpd_req_t* req, bool download) {
+esp_err_t fileHandler(httpd_req_t* req, bool download, bool isSD) {
   // send file contents to browser
   httpd_resp_set_hdr(req, "Access-Control-Allow-Origin", "*");
   if (!strcmp(inFileName, LOG_FILE_PATH)) flush_log(false);
-  File df = fp.open(inFileName);
+  File df;
+  if(isSD) df = SD_MMC.open(inFileName);
+  else df = fp.open(inFileName);
   if (!df) {
     LOG_WRN("File does not exist or cannot be opened: %s", inFileName);
     httpd_resp_send_404(req);
@@ -87,8 +89,8 @@ static esp_err_t indexHandler(httpd_req_t* req) {
     httpd_resp_set_type(req, "text/html");                        
     return httpd_resp_sendstr(req, startupFailure);
   }
-  // Show wifi wizard if not setup, using access point mode  
-  if (!fp.exists(INDEX_PAGE_PATH) && WiFi.status() != WL_CONNECTED) {
+  // Show wifi wizard if not setup, using access point mode 
+  if(!fp.exists(INDEX_PAGE_PATH) && WiFi.status() != WL_CONNECTED) {
     // Open a basic wifi setup page
     httpd_resp_set_type(req, "text/html");                             
     return httpd_resp_sendstr(req, setupPage_html);
@@ -313,7 +315,7 @@ esp_err_t uploadHandler(httpd_req_t *req) {
 
   } else {
     // create / replace data file on storage
-    File uf = fp.open(inFileName, FILE_WRITE);
+    File uf = SD_MMC.open(inFileName, FILE_WRITE);
     if (!uf) LOG_WRN("Failed to open %s on storage", inFileName);
     else {
       // obtain file content
@@ -336,6 +338,40 @@ esp_err_t uploadHandler(httpd_req_t *req) {
       if (res == ESP_OK) LOG_INF("Uploaded file %s", inFileName);
       else LOG_WRN("Failed to upload file %s", inFileName);     
     }
+  }
+  return res;
+}
+
+esp_err_t uploadDataHandler(httpd_req_t *req) {
+  // upload file for storage or firmware update
+  esp_err_t res = ESP_OK;
+  size_t fileSize = req->content_len;
+  size_t rxSize = min(fileSize, (size_t)JSON_BUFF_LEN);
+  int bytesRead = -1;
+  LOG_INF("Upload file %s", inFileName);
+  // create / replace data file on storage
+  File uf = fp.open(inFileName, FILE_WRITE);
+  if (!uf) LOG_WRN("Failed to open %s on storage", inFileName);
+  else {
+    // obtain file content
+    do {
+      bytesRead = httpd_req_recv(req, jsonBuff, rxSize);
+      if (bytesRead < 0) {  
+        if (bytesRead == HTTPD_SOCK_ERR_TIMEOUT) {
+          delay(10);
+          continue;
+        } else {
+          LOG_WRN("Upload request failed with status %i", bytesRead);
+          break;
+        }
+      }
+      uf.write((const uint8_t*)jsonBuff, bytesRead);
+    } while (bytesRead > 0);
+    uf.close();
+    res = bytesRead < 0 ? ESP_FAIL : ESP_OK;
+    httpd_resp_sendstr(req, res == ESP_OK ? "Completed upload file" : "Failed to upload file, retry");
+    if (res == ESP_OK) LOG_INF("Uploaded file %s", inFileName);
+    else LOG_WRN("Failed to upload file %s", inFileName);     
   }
   return res;
 }
@@ -435,6 +471,7 @@ static esp_err_t webDavOrNotFoundHandler(httpd_req_t *req, httpd_err_code_t err)
   // either handle WebDAV methods or report non existent URI
 #if INCLUDE_WEBDAV
   if (strncmp(req->uri, WEBDAV, strlen(WEBDAV)) == 0) return handleWebDav(req) ? ESP_OK : ESP_FAIL;
+  if (strncmp(req->uri, WEBDAV_DATA, strlen(WEBDAV_DATA)) == 0) return handleWebDav(req, false) ? ESP_OK : ESP_FAIL;
 #endif
   // For any other URI send 404 and close socket
   httpd_resp_send_404(req);
@@ -494,6 +531,7 @@ void startWebServer() {
   httpd_uri_t statusUri = {.uri = "/status", .method = HTTP_GET, .handler = statusHandler, .user_ctx = NULL};
   httpd_uri_t wsUri = {.uri = "/ws", .method = HTTP_GET, .handler = wsHandler, .user_ctx = NULL, .is_websocket = true};
   httpd_uri_t uploadUri = {.uri = "/upload", .method = HTTP_POST, .handler = uploadHandler, .user_ctx = NULL};
+  httpd_uri_t uploadDataUri = {.uri = "/uploadfs", .method = HTTP_POST, .handler = uploadDataHandler, .user_ctx = NULL};
   httpd_uri_t optionsUri = {.uri = "/upload", .method = HTTP_OPTIONS, .handler = sendCrossOriginHeader, .user_ctx = NULL};
   httpd_uri_t sustainUri = {.uri = "/sustain", .method = HTTP_GET, .handler = appSpecificSustainHandler, .user_ctx = NULL};
   httpd_uri_t checkUri = {.uri = "/sustain", .method = HTTP_HEAD, .handler = appSpecificSustainHandler, .user_ctx = NULL};
@@ -509,6 +547,7 @@ void startWebServer() {
     httpd_register_uri_handler(httpServer, &statusUri);
     httpd_register_uri_handler(httpServer, &wsUri);
     httpd_register_uri_handler(httpServer, &uploadUri);
+    httpd_register_uri_handler(httpServer, &uploadDataUri);
     httpd_register_uri_handler(httpServer, &optionsUri);
     httpd_register_uri_handler(httpServer, &sustainUri);
     httpd_register_uri_handler(httpServer, &checkUri);

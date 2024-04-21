@@ -196,9 +196,9 @@ bool haveWavFile(bool isTL) {
 #if INCLUDE_MIC
   if (isTL) return false;
   // check if wave file exists
-  if (!STORAGE.exists(WAVTEMP)) return 0; 
+  if (!SD_MMC.exists(WAVTEMP)) return 0; 
   // open it and get its size
-  wavFile = STORAGE.open(WAVTEMP, FILE_READ);
+  wavFile = SD_MMC.open(WAVTEMP, FILE_READ);
   if (wavFile) {
     // add sound file index
     audSize = wavFile.size() - WAV_HEADER_LEN;
@@ -225,7 +225,7 @@ size_t writeWavFile(byte* clientBuf, size_t buffSize) {
   if (readLen) return readLen; 
   // get here if finished
   wavFile.close();
-  STORAGE.remove(WAVTEMP);
+  SD_MMC.remove(WAVTEMP);
   offsetWav = CHUNK_HDR;
   return 0;
 }

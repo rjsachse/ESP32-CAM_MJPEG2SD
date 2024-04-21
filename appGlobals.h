@@ -106,7 +106,10 @@ CAMERA_MODEL_ESP32S3_CAM_LCD
 #ifdef SIDE_ALARM
 #define STORAGE LittleFS
 #else
-#define STORAGE SD_MMC
+#define RECORD false //Enable record to sd card, (no recording to internal filesystem)
+#define STORAGE LittleFS
+#define WEB_STORAGE LittleFS
+//#define STORAGE SD_MMC
 #endif
 #define GITHUB_PATH "/s60sc/ESP32-CAM_MJPEG2SD/master"
 #define RAMSIZE (1024 * 8) // set this to multiple of SD card sector size (512 or 1024 bytes)

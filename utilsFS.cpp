@@ -57,7 +57,7 @@ static bool prepSD_MMC() {
   digitalWrite(4, 0); // set lamp pin fully off as sd_mmc library still initialises pin 4 in 1 line mode
 #endif 
   if (res) {
-    fp.mkdir(DATA_DIR);
+    SD_MMC.mkdir(DATA_DIR);
     infoSD();
     res = true;
   } else {
@@ -67,18 +67,25 @@ static bool prepSD_MMC() {
   return res;
 }
 
-static void listFolder(const char* rootDir) { 
+static void listFolder(const char* rootDir, bool isSD = false) { 
   // list contents of folder
   LOG_INF("Sketch size %s", fmtSize(ESP.getSketchSize()));    
-  File root = fp.open(rootDir);
+  File root;
+  if(isSD) root = SD_MMC.open(rootDir);
+  else root = fp.open(rootDir);
   File file = root.openNextFile();
   while (file) {
     LOG_INF("File: %s, size: %s", file.path(), fmtSize(file.size()));
     file = root.openNextFile();
   }
   char totalBytes[20];
-  strcpy(totalBytes, fmtSize(STORAGE.totalBytes()));
-  LOG_INF("%s: %s used of %s", fsType, fmtSize(STORAGE.usedBytes()), totalBytes);
+  if(isSD) {
+    strcpy(totalBytes, fmtSize(SD_MMC.totalBytes()));
+    LOG_INF("%s: %s used of %s", fsType, fmtSize(SD_MMC.usedBytes()), totalBytes);
+  } else {
+    strcpy(totalBytes, fmtSize(STORAGE.totalBytes()));
+    LOG_INF("%s: %s used of %s", fsType, fmtSize(STORAGE.usedBytes()), totalBytes);
+  }
 }
 
 bool startStorage() {
@@ -87,7 +94,7 @@ bool startStorage() {
   if ((fs::SDMMCFS*)&STORAGE == &SD_MMC) {
     strcpy(fsType, "SD_MMC");
     res = prepSD_MMC();
-    if (res) listFolder(DATA_DIR);
+    if (res) listFolder(DATA_DIR, true);
     else snprintf(startupFailure, SF_LEN, STARTUP_FAIL "Check SD card inserted");
     debugMemory("startStorage");
     return res; 
@@ -109,10 +116,18 @@ bool startStorage() {
       if (res) LittleFS.mkdir(DATA_DIR);
     }
 #endif
+#ifdef _FFat_H_
+    if ((fs::F_Fat*)&STORAGE == &FFat) {
+      strcpy(fsType, "FFat");
+      res = FFat.begin(formatIfMountFailed);
+      // create data folder if not present
+      if (res) FFat.mkdir(DATA_DIR);
+    }
+#endif
     if (res) {  
       // list details of files on file system
-      const char* rootDir = !strcmp(fsType, "LittleFS") ? DATA_DIR : "/";
-      listFolder(rootDir);
+      const char* rootDir = !strcmp(fsType, "FFat") ? DATA_DIR : "/";
+      listFolder(rootDir, false);
     }
   } else {
     snprintf(startupFailure, SF_LEN, STARTUP_FAIL "Failed to mount %s", fsType);  
@@ -122,9 +137,11 @@ bool startStorage() {
   return res;
 }
 
-static void getOldestDir(char* oldestDir) {
+static void getOldestDir(char* oldestDir, bool isSD = false) {
   // get oldest folder by its date name
-  File root = fp.open("/");
+  File root;
+  if(isSD) root = SD_MMC.open("/");
+  else root = fp.open("/");
   File file = root.openNextFile();
   if (file) strcpy(oldestDir, file.path()); // initialise oldestDir
   while (file) {
@@ -147,19 +164,19 @@ void inline getFileDate(File& file, char* fileDate) {
 bool checkFreeStorage() { 
   // Check for sufficient space on storage
   bool res = false;
-  size_t freeSize = (size_t)((STORAGE.totalBytes() - STORAGE.usedBytes()) / ONEMEG);
+  size_t freeSize = (size_t)((SD_MMC.totalBytes() - SD_MMC.usedBytes()) / ONEMEG);
   if (!sdFreeSpaceMode && freeSize < sdMinCardFreeSpace) 
     LOG_WRN("Space left %uMB is less than minimum %uMB", freeSize, sdMinCardFreeSpace);
   else {
     // delete to make space
     while (freeSize < sdMinCardFreeSpace) {
       char oldestDir[FILE_NAME_LEN];
-      getOldestDir(oldestDir);
+      getOldestDir(oldestDir, true);
       LOG_WRN("Deleting oldest folder: %s %s", oldestDir, sdFreeSpaceMode == 2 ? "after uploading" : "");
 #if INCLUDE_FTP_HFS
       if (sdFreeSpaceMode == 2) fsStartTransfer(oldestDir); // transfer and then delete oldest folder
 #endif
-      deleteFolderOrFile(oldestDir);
+      deleteFolderOrFile(oldestDir,true);
       freeSize = (size_t)((STORAGE.totalBytes() - STORAGE.usedBytes()) / ONEMEG);
     }
     LOG_INF("Storage free space: %s", fmtSize(STORAGE.totalBytes() - STORAGE.usedBytes()));
@@ -190,7 +207,7 @@ void setFolderName(const char* fname, char* fileName) {
   } else strcpy(fileName, fname);
 }
 
-bool listDir(const char* fname, char* jsonBuff, size_t jsonBuffLen, const char* extension) {
+bool listDir(const char* fname, char* jsonBuff, size_t jsonBuffLen, const char* extension, bool isSD = false) {
   // either list day folders in root, or files in a day folder
   bool hasExtension = false;
   char partJson[200]; // used to build SD page json buffer
@@ -208,7 +225,9 @@ bool listDir(const char* fname, char* jsonBuff, size_t jsonBuffLen, const char* 
     // ignore leading '/' if not the only character
     bool returnDirs = strlen(fileName) > 1 ? (strchr(fileName+1, '/') == NULL ? false : true) : true; 
     // open relevant folder to list contents
-    File root = fp.open(fileName);
+    File root;
+    if(isSD) root = SD_MMC.open(fileName);
+    else root = fp.open(fileName);
     if (strlen(fileName)) {
       if (!root) LOG_WRN("Failed to open directory %s", fileName);
       else if (!root.isDirectory()) LOG_WRN("Not a directory %s", fileName);
@@ -268,11 +287,13 @@ static void deleteOthers(const char* baseFile) {
 #endif  
 }
 
-void deleteFolderOrFile(const char* deleteThis) {
+void deleteFolderOrFile(const char* deleteThis, bool isSD = false) {
   // delete supplied file or folder, unless it is a reserved folder
   char fileName[FILE_NAME_LEN];
   setFolderName(deleteThis, fileName);
-  File df = fp.open(fileName);
+  File df;
+  if(isSD) df = SD_MMC.open(fileName);
+  else df = fp.open(fileName);
   if (!df) {
     LOG_WRN("Failed to open %s", fileName);
     return;

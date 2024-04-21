@@ -1,5 +1,5 @@
 //
-// Telemetry data recorded to storage during camera recording
+// Telemetry data recorded to SD MMC during camera recording if enabled
 // Formatted as CSV file for presentation in spreadsheet
 // and as a SRT file to provide video subtitles when used with a media player
 // Sensor data obtained from user supplied libraries and code
@@ -146,10 +146,10 @@ static void telemetryTask(void* pvParameters) {
     char timeStr[10];
     uint32_t sampleInterval = 1000 * (teleInterval < 1 ? 1 : teleInterval);
     // open storage file
-    if (STORAGE.exists(TELETEMP)) STORAGE.remove(TELETEMP);
-    if (STORAGE.exists(SRTTEMP)) STORAGE.remove(SRTTEMP);
-    File teleFile = STORAGE.open(TELETEMP, FILE_WRITE);
-    File srtFile = STORAGE.open(SRTTEMP, FILE_WRITE);
+    if (SD_MMC.exists(TELETEMP)) SD_MMC.remove(TELETEMP);
+    if (SD_MMC.exists(SRTTEMP)) SD_MMC.remove(SRTTEMP);
+    File teleFile = SD_MMC.open(TELETEMP, FILE_WRITE);
+    File srtFile = SD_MMC.open(SRTTEMP, FILE_WRITE);
     // write CSV header row to buffer
     highPoint[0] = sprintf(teleBuf[0], "%s", TELEHEADER); 
     highPoint[1] = 0;
@@ -193,9 +193,9 @@ static void telemetryTask(void* pvParameters) {
     srtFile.close();
     // rename temp files to specific file names using avi file name with relevant extension
     changeExtension(teleFileName, CSV_EXT);
-    STORAGE.rename(TELETEMP, teleFileName);
+    SD_MMC.rename(TELETEMP, teleFileName);
     changeExtension(teleFileName, SRT_EXT);
-    STORAGE.rename(SRTTEMP, teleFileName);
+    SD_MMC.rename(SRTTEMP, teleFileName);
     LOG_INF("Saved %d entries in telemetry files", srtSeqNo);
   }
 }

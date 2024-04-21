@@ -339,13 +339,13 @@ void updateStatus(const char* variable, const char* _value) {
   else if (!strcmp(variable, "resetLog")) reset_log(); 
   else if (!strcmp(variable, "clear")) savePrefs(false); // /control?clear=1
   else if (!strcmp(variable, "deldata")) {  
-    if (intVal) deleteFolderOrFile(DATA_DIR); // entire folder
+    if (intVal) deleteFolderOrFile(DATA_DIR, false); // entire folder
     else {
       // manually specified file, eg control?deldata=favicon.ico
       char delFile[FILE_NAME_LEN];
       int dlen = snprintf(delFile, FILE_NAME_LEN, "%s/%s", DATA_DIR, value);
       if (dlen > FILE_NAME_LEN) LOG_WRN("File name %s too long", value);
-      else deleteFolderOrFile(delFile);
+      else deleteFolderOrFile(delFile,false);
     }
     doRestart("user requested restart after data deletion"); 
   }
@@ -486,7 +486,7 @@ static bool checkConfigFile() {
   }
   file.close();
   if (!goodFile) {
-    deleteFolderOrFile(DATA_DIR);
+    deleteFolderOrFile(DATA_DIR, false);
     STORAGE.mkdir(DATA_DIR);
   }
   return goodFile;

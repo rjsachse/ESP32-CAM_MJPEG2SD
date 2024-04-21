@@ -126,7 +126,7 @@ bool useFtps = false;
 char ftpUser[MAX_HOST_LEN];
 static char rspBuf[256]; // Ftp response buffer
 static char respCodeRx[4]; // ftp response code
-static fs::FS fp = STORAGE;
+static fs::FS fp = SD_MMC;
 #define NO_CHECK "999"
 
 // WiFi Clients
@@ -361,7 +361,7 @@ static void fileServerTask(void* parameter) {
     if (!root) LOG_WRN("Failed to open: %s", storedPathName);
     else { 
       bool res = uploadFolderOrFileFs(storedPathName);
-      if (res && deleteAfter) deleteFolderOrFile(storedPathName);
+      if (res && deleteAfter) deleteFolderOrFile(storedPathName, true);
     }
   } else LOG_DBG("Root or null is not allowed %s", storedPathName);  
   uploadInProgress = false;

@@ -57,16 +57,23 @@ static void formatTime(time_t t) {
   strftime(formattedTime, sizeof(formattedTime), "%a, %d %b %Y %H:%M:%S %Z", timeinfo);
 }
 
-static bool haveResource(bool ignore = false) {
+static bool haveResource(bool ignore = false, bool isSD = true) {
   // check if file or folder exists
-  if (STORAGE.exists(pathName)) return true;
-  else if (!ignore) httpd_resp_send_404(req); 
+  if (isSD){
+    if (SD_MMC.exists(pathName)) return true;
+    else if (!ignore) httpd_resp_send_404(req); 
+  } else {
+    if (STORAGE.exists(pathName)) return true;
+    else if (!ignore) httpd_resp_send_404(req); 
+  } 
   return false;
 } 
 
-static bool isFolder() {
+static bool isFolder(bool isSD = true) {
   // identify if resource is file of folder
-  File root = STORAGE.open(pathName);
+  File root;
+  if (isSD) root = SD_MMC.open(pathName);
+  else root = STORAGE.open(pathName);
   bool res = root.isDirectory();
   root.close();
   return res;
@@ -80,7 +87,7 @@ static void sendContentProp(const char* prop, const char* value) {
   LOG_DBG("propStr %s", propStr);
 }
 
-static void sendPropResponse(File& file, const char* payload) {
+static void sendPropResponse(File& file, const char* payload, bool isSD = true) {
   // send SD properties details to PC
   size_t encodeLen = 3 + strlen(file.path()) * 2;
   size_t maxLen = strlen(XML2) + encodeLen + strlen(XML3);
@@ -107,9 +114,11 @@ static void sendPropResponse(File& file, const char* payload) {
     // return quota data if requested
     if (strstr(payload, "quota-available-bytes") != NULL || strstr(payload, "quota-used-bytes") != NULL) {
       char numberStr[15];
-      sprintf(numberStr, "%llu", (uint64_t)STORAGE.totalBytes() - (uint64_t)STORAGE.usedBytes());
+      if (isSD) sprintf(numberStr, "%llu", (uint64_t)SD_MMC.totalBytes() - (uint64_t)SD_MMC.usedBytes());
+      else sprintf(numberStr, "%llu", (uint64_t)STORAGE.totalBytes() - (uint64_t)STORAGE.usedBytes());
       sendContentProp("quota-available-bytes", numberStr);
-      sprintf(numberStr, "%llu", (uint64_t)STORAGE.usedBytes());
+      if (isSD) sprintf(numberStr, "%llu", (uint64_t)SD_MMC.usedBytes());
+      else sprintf(numberStr, "%llu", (uint64_t)STORAGE.usedBytes());
       sendContentProp("quota-used-bytes", numberStr);
     }
   }
@@ -141,7 +150,7 @@ static bool getPayload(char* payload) {
   return bytesRead < 0 ? false : true;
 }
 
-static bool handleProp() {
+static bool handleProp(bool isSD = true) {
   // provide details of SD content to PC
   if (!haveResource()) return false;
   // get depth header
@@ -159,7 +168,9 @@ static bool handleProp() {
   httpd_resp_sendstr_chunk(req, XML1);
   
   // return details of selected folder
-  File root = STORAGE.open(pathName);
+  File root;
+  if(isSD) root = SD_MMC.open(pathName);
+  else root = STORAGE.open(pathName);
   sendPropResponse(root, payload);
   if (depth && root.isDirectory()) {
     // if requested return details of each resource in folder
@@ -181,23 +192,23 @@ static bool handleOptions() {
   return true;
 }
 
-static bool handleGet() {
+static bool handleGet(bool isSD) {
   // transfer file to PC
-  if (!haveResource()) return false;
-  if (isFolder()) {
+  if (!haveResource(false, isSD)) return false;
+  if (isFolder(isSD)) {
     httpd_resp_send_404(req);
     return false;
   } else {
     httpd_resp_set_type(req, mimeTypes[getMimeType(pathName)]);
     strcpy(inFileName, pathName);
-    esp_err_t res = fileHandler(req); // file content
+    esp_err_t res = fileHandler(req, false, isSD); // file content
     return res == ESP_OK ? true : false;
   }
   return true;
 }
 
-static bool handleHead() {
-  if (!haveResource()) return false;
+static bool handleHead(bool isSD) {
+  if (!haveResource(false, isSD)) return false;
   httpd_resp_sendstr(req, NULL);
   return true;
 }
@@ -220,12 +231,14 @@ static bool handleUnlock() {
   return true;
 }
 
-static bool handlePut() {
+static bool handlePut(bool isSD = true) {
   // transfer file from PC
   if (isFolder()) return false;
   if (!haveResource(true) || !req->content_len) {
     // if no content, create file entry only 
-    File file = STORAGE.open(pathName, FILE_WRITE);
+    File file;
+    if (isSD) file = SD_MMC.open(pathName, FILE_WRITE);
+    else file = STORAGE.open(pathName, FILE_WRITE);
     file.close();
     httpd_resp_set_status(req, "201 Created");
     httpd_resp_sendstr(req, NULL);
@@ -233,25 +246,29 @@ static bool handlePut() {
   if (req->content_len) {
     // transfer file content to SD
     strcpy(inFileName, pathName);
-    esp_err_t res = uploadHandler(req);
+    esp_err_t res;
+    if (isSD) esp_err_t res = uploadHandler(req);
+    else esp_err_t res = uploadDataHandler(req);
     return res == ESP_OK ? true : false;
   } 
   return true;
 }
 
-static bool handleDelete() {
+static bool handleDelete(bool isSD = true) {
   // delete file or folder
   if (!haveResource()) return false;
   // for this app, single folder level only
-  deleteFolderOrFile(pathName);
+  deleteFolderOrFile(pathName, isSD);
   httpd_resp_sendstr(req, NULL);
   return true;
 }
 
-static bool handleMkdir() {
+static bool handleMkdir(bool isSD = true) {
   // create new folder
   if (haveResource(true)) return false; // already exists
-  bool res = STORAGE.mkdir(pathName);
+  bool res;
+  if(isSD) res = SD_MMC.mkdir(pathName);
+  else res = STORAGE.mkdir(pathName);
   if (res) httpd_resp_set_status(req, "201 Created");
   else httpd_resp_set_status(req, "500 Internal Server Error");
   httpd_resp_sendstr(req, NULL);
@@ -269,7 +286,7 @@ static bool checkSamePath(const char *source_path, const char *dest_path) {
   return strcmp(source_dir, dest_dir) == 0;
 }
 
-static bool handleMove() {
+static bool handleMove(bool isSD = true) {
   // rename file or folder, or change file location
   bool res = false;
   char dest[100];
@@ -283,7 +300,8 @@ static bool handleMove() {
     // only allow renaming if a folder
     if (isFolder()) res = checkSamePath(pathName, dest);
     if (res) {
-      res = STORAGE.rename(pathName, dest);
+      if(isSD) res = SD_MMC.rename(pathName, dest);
+      else res = STORAGE.rename(pathName, dest);
       if (res) httpd_resp_set_status(req, "201 Created");
       else httpd_resp_set_status(req, "500 Internal Server Error");
       httpd_resp_sendstr(req, NULL);
@@ -301,11 +319,12 @@ static bool handleCopy() {
   return false;
 }
 
-bool handleWebDav(httpd_req_t* rreq) {
+bool handleWebDav(httpd_req_t* rreq, bool isSD) {
   // extract method to determine which WebDAV action to take
   //showHttpHeaders(rreq);
   req = rreq;
-  sprintf(pathName, "%s", req->uri + strlen(WEBDAV)); // strip out "/webdav"
+  if(isSD) sprintf(pathName, "%s", req->uri + strlen(WEBDAV)); // strip out "/webdav"
+  else sprintf(pathName, "%s", req->uri + strlen(WEBDAV_DATA)); // strip out "/webdav"
   if (pathName[strlen(pathName) - 1] == '/') pathName[strlen(pathName) - 1] = 0; // remove final / if present
   if (!strlen(pathName)) strcpy(pathName, "/"); // if pathname empty, use single /
   urlDecode(pathName);
@@ -315,17 +334,17 @@ bool handleWebDav(httpd_req_t* rreq) {
   httpd_resp_set_hdr(req, "Allow", ALLOW);
 
   switch(req->method) {
-    case HTTP_PUT: return handlePut(); // file create/uploads
-    case HTTP_PROPFIND: return handleProp(); // get file or directory properties
-    case HTTP_PROPPATCH: return handleProp(); // set file or directory properties
-    case HTTP_GET: return handleGet(); // file downloads
-    case HTTP_HEAD: return handleHead(); // file properties
+    case HTTP_PUT: return handlePut(isSD); // file create/uploads
+    case HTTP_PROPFIND: return handleProp(isSD); // get file or directory properties
+    case HTTP_PROPPATCH: return handleProp(isSD); // set file or directory properties
+    case HTTP_GET: return handleGet(isSD); // file downloads
+    case HTTP_HEAD: return handleHead(isSD); // file properties
     case HTTP_OPTIONS: return handleOptions(); // supported options
     case HTTP_LOCK: return handleLock(); // open file lock
     case HTTP_UNLOCK: return handleUnlock(); // close file lock
-    case HTTP_MKCOL: return handleMkdir(); // folder creation
-    case HTTP_MOVE: return handleMove(); // rename or move file or directory 
-    case HTTP_DELETE: return handleDelete(); // delete a file or directory
+    case HTTP_MKCOL: return handleMkdir(isSD); // folder creation
+    case HTTP_MOVE: return handleMove(isSD); // rename or move file or directory 
+    case HTTP_DELETE: return handleDelete(isSD); // delete a file or directory
     case HTTP_COPY: return handleCopy(); // copy a file or directory
     default: {
       LOG_ERR("Unhandled method %s", HTTP_METHOD_STRING(req->method));

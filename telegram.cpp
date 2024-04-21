@@ -268,8 +268,7 @@ bool sendTgramPhoto(uint8_t* photoData, size_t photoSize, const char* caption) {
 bool sendTgramFile(const char* fileName, const char* contentType, const char* caption) {
   // retrieve identified file from selected storage and send to Telegram
   if (connectTelegram()) {
-    fs::FS fp = STORAGE;
-    File df = fp.open(fileName);
+    File df = SD_MMC.open(fileName);
     char errMsg[100] = "";
     if (df) {
       if (df.size() < MAX_TGRAM_SIZE) {

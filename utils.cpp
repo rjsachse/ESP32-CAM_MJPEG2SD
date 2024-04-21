@@ -711,7 +711,7 @@ void flush_log(bool andClose) {
 
 static void remote_log_init_SD() {
 #if !CONFIG_IDF_TARGET_ESP32C3
-  STORAGE.mkdir(DATA_DIR);
+  SD_MMC.mkdir(DATA_DIR);
   // Open remote file
   log_remote_fp = NULL;
   log_remote_fp = fopen("/sdcard" LOG_FILE_PATH, "a");
@@ -727,7 +727,7 @@ void reset_log() {
   if (logType == 0) ramLogClear();
   if (logType == 2) {
     if (log_remote_fp != NULL) flush_log(true); // Close log file
-    STORAGE.remove(LOG_FILE_PATH);
+    SD_MMC.remove(LOG_FILE_PATH);
     remote_log_init_SD();
   }
   if (logType != 1) LOG_INF("Cleared %s log file", logType == 0 ? "RAM" : "SD"); 

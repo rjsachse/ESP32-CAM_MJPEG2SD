@@ -113,10 +113,10 @@ static void openAvi() {
   // time to open a new file on SD increases with the number of files already present
   oTime = millis();
   dateFormat(partName, sizeof(partName), true);
-  STORAGE.mkdir(partName); // make date folder if not present
+  SD_MMC.mkdir(partName); // make date folder if not present
   dateFormat(partName, sizeof(partName), false);
   // open avi file with temporary name 
-  aviFile = STORAGE.open(AVITEMP, FILE_WRITE);
+  aviFile = SD_MMC.open(AVITEMP, FILE_WRITE);
   oTime = millis() - oTime;
   LOG_DBG("File opening time: %ums", oTime);
 #if INCLUDE_MIC
@@ -156,13 +156,13 @@ static void timeLapse(camera_fb_t* fb) {
         // initialise time lapse avi
         requiredFrames = tlDurationMins * 60 / tlSecsBetweenFrames;
         dateFormat(partName, sizeof(partName), true);
-        STORAGE.mkdir(partName); // make date folder if not present
+        SD_MMC.mkdir(partName); // make date folder if not present
         dateFormat(partName, sizeof(partName), false);
         int tlen = snprintf(TLname, FILE_NAME_LEN - 1, "%s_%s_%u_%u_T.%s", 
           partName, frameData[fsizePtr].frameSizeStr, tlPlaybackFPS, tlDurationMins, AVI_EXT);
         if (tlen > FILE_NAME_LEN - 1) LOG_WRN("file name truncated");
-        if (STORAGE.exists(TLTEMP)) STORAGE.remove(TLTEMP);
-        tlFile = STORAGE.open(TLTEMP, FILE_WRITE);
+        if (SD_MMC.exists(TLTEMP)) SD_MMC.remove(TLTEMP);
+        tlFile = SD_MMC.open(TLTEMP, FILE_WRITE);
         tlFile.write(aviHeader, AVI_HEADER_LEN); // space for header
         prepAviIndex(true);
         LOG_INF("Started time lapse file %s, duration %u mins, for %u frames",  TLname, tlDurationMins, requiredFrames);
@@ -204,7 +204,7 @@ static void timeLapse(camera_fb_t* fb) {
         tlFile.seek(0, SeekSet); // start of file
         tlFile.write(aviHeader, AVI_HEADER_LEN);
         tlFile.close(); 
-        STORAGE.rename(TLTEMP, TLname);
+        SD_MMC.rename(TLTEMP, TLname);
         frameCntTL = intervalCnt = 0;
         LOG_INF("Finished time lapse: %s", TLname);
 #if INCLUDE_FTP_HFS
@@ -312,7 +312,7 @@ static bool closeAvi() {
       partName, frameData[fsizePtr].frameSizeStr, actualFPSint, vidDurationSecs, 
       haveWav ? "_S" : "", haveSrt ? "_M" : "", AVI_EXT); 
     if (alen > FILE_NAME_LEN - 1) LOG_WRN("file name truncated");
-    STORAGE.rename(AVITEMP, aviFileName);
+    SD_MMC.rename(AVITEMP, aviFileName);
     LOG_DBG("AVI close time %lu ms", millis() - hTime); 
     cTime = millis() - cTime;
 #if INCLUDE_TELEM
@@ -359,7 +359,7 @@ static bool closeAvi() {
     return true; 
   } else {
     // delete too small files if exist
-    STORAGE.remove(AVITEMP);
+    SD_MMC.remove(AVITEMP);
     LOG_INF("Insufficient capture duration: %u secs", vidDurationSecs); 
     return false;
   }
@@ -526,7 +526,7 @@ void openSDfile(const char* streamFile) {
     stopPlaying(); // in case already running
     strcpy(aviFileName, streamFile);
     LOG_INF("Playing %s", aviFileName);
-    playbackFile = STORAGE.open(aviFileName, FILE_READ);
+    playbackFile = SD_MMC.open(aviFileName, FILE_READ);
     playbackFile.seek(AVI_HEADER_LEN, SeekSet); // skip over header
     playbackFPS(aviFileName);
     isPlaying = true; //playback status
@@ -714,7 +714,7 @@ bool prepRecording() {
     LOG_INF("- raise %s pin %u to 3.3V", extStr, pirPin);
   }
   if (useMotion) LOG_INF("- move in front of camera");
-  if ((fs::LittleFSFS*)&STORAGE == &LittleFS) {
+  if (!RECORD) {
     if (doRecording) {
       doRecording = false; 
       LOG_WRN("Recording to SD disabled");

@@ -63,7 +63,7 @@ bool updateAppStatus(const char* variable, const char* value) {
 #endif
   else if (!strcmp(variable, "delete")) {
     stopPlayback = true;
-    deleteFolderOrFile(value);
+    deleteFolderOrFile(value, true);
   }
   else if (!strcmp(variable, "record")) doRecording = (intVal) ? true : false;   
   else if (!strcmp(variable, "forceRecord")) forceRecord = (intVal) ? true : false; 
@@ -212,7 +212,7 @@ esp_err_t appSpecificWebHandler(httpd_req_t *req, const char* variable, const ch
   if (!strcmp(variable, "sfile")) {
     // get folders / files on SD, save received filename if has required extension
     strcpy(inFileName, value);
-    if (!forceRecord) doPlayback = listDir(inFileName, jsonBuff, JSON_BUFF_LEN, AVI_EXT); // browser control
+    if (!forceRecord) doPlayback = listDir(inFileName, jsonBuff, JSON_BUFF_LEN, AVI_EXT, true); // browser control
     else strcpy(jsonBuff, "{}");
     httpd_resp_set_type(req, "application/json");
     httpd_resp_sendstr(req, jsonBuff);
@@ -321,19 +321,25 @@ void buildAppJsonString(bool filter) {
     
   // Extend info
   uint8_t cardType = 99; // not MMC
-  if ((fs::SDMMCFS*)&STORAGE == &SD_MMC) cardType = SD_MMC.cardType();
+  if (RECORD) cardType = SD_MMC.cardType();
   if (cardType == CARD_NONE) p += sprintf(p, "\"card\":\"%s\",", "NO card");
   else {
     if (!filter) {
       if (cardType == CARD_MMC) p += sprintf(p, "\"card\":\"%s\",", "MMC"); 
       else if (cardType == CARD_SD) p += sprintf(p, "\"card\":\"%s\",", "SDSC");
       else if (cardType == CARD_SDHC) p += sprintf(p, "\"card\":\"%s\",", "SDHC"); 
-      else if (cardType == 99) p += sprintf(p, "\"card\":\"%s\",", "LittlrFS"); 
+      else if (cardType == 99) p += sprintf(p, "\"card\":\"%s\",", "No Recording Storage"); 
     }
-    if ((fs::SDMMCFS*)&STORAGE == &SD_MMC) p += sprintf(p, "\"card_size\":\"%s\",", fmtSize(SD_MMC.cardSize()));
-    p += sprintf(p, "\"used_bytes\":\"%s\",", fmtSize(STORAGE.usedBytes()));
-    p += sprintf(p, "\"free_bytes\":\"%s\",", fmtSize(STORAGE.totalBytes() - STORAGE.usedBytes()));
-    p += sprintf(p, "\"total_bytes\":\"%s\",", fmtSize(STORAGE.totalBytes()));
+    if (RECORD) {
+      p += sprintf(p, "\"card_size\":\"%s\",", fmtSize(SD_MMC.cardSize()));
+      p += sprintf(p, "\"used_bytes\":\"%s\",", fmtSize(SD_MMC.usedBytes()));
+      p += sprintf(p, "\"free_bytes\":\"%s\",", fmtSize(SD_MMC.totalBytes() - SD_MMC.usedBytes()));
+      p += sprintf(p, "\"total_bytes\":\"%s\",", fmtSize(SD_MMC.totalBytes()));
+    } else {
+      p += sprintf(p, "\"used_bytes\":\"%s\",", fmtSize(STORAGE.usedBytes()));
+      p += sprintf(p, "\"free_bytes\":\"%s\",", fmtSize(STORAGE.totalBytes() - STORAGE.usedBytes()));
+      p += sprintf(p, "\"total_bytes\":\"%s\",", fmtSize(STORAGE.totalBytes()));
+    }
   }
   p += sprintf(p, "\"free_psram\":\"%s\",", fmtSize(ESP.getFreePsram()));     
 #if INCLUDE_FTP_HFS
@@ -434,7 +440,7 @@ static bool downloadAvi(const char* userCmd) {
     pos = strchr(fileName, '_');
     memmove(pos, fileName, sizeof(fileName) - (pos - fileName));
     strncat(fileName, ".avi", sizeof(fileName - 1) - strlen(fileName)); 
-    if (STORAGE.exists(fileName)) sendTgramFile(fileName, "video/x-msvideo", "");
+    if (SD_MMC.exists(fileName)) sendTgramFile(fileName, "video/x-msvideo", "");
     else sendTgramMessage("AVI file not found: ", fileName, "");
   }
   return (bool)pos;
@@ -442,7 +448,7 @@ static bool downloadAvi(const char* userCmd) {
 
 static void saveRamLog() {
   // save ramlog to storage for upload to telegram
-  File ramFile = STORAGE.open(DATA_DIR "/ramlog" TEXT_EXT, FILE_WRITE);
+  File ramFile = SD_MMC.open(DATA_DIR "/ramlog" TEXT_EXT, FILE_WRITE);
   int startPtr, endPtr;
   startPtr = endPtr = mlogEnd;  
   // write log in chunks
@@ -475,7 +481,7 @@ void appSpecificTelegramTask(void* p) {
         saveRamLog();
         sprintf(userCmd, "/log from %s", hostName);
         sendTgramFile(DATA_DIR "/ramlog" TEXT_EXT, "text/plain", userCmd);
-        deleteFolderOrFile(DATA_DIR "/ramlog" TEXT_EXT);
+        deleteFolderOrFile(DATA_DIR "/ramlog" TEXT_EXT, false);
       } else {
         // initially assume it is an avi file download request
         if (!downloadAvi(userCmd)) sendTgramMessage("Request not recognised: ", userCmd, "");

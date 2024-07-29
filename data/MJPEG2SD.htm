@@ -874,6 +874,16 @@
         align-items: center;
       }
 
+      .pids-wrapper{
+        width: 100%;
+      }
+      .pid{
+        width: calc(10% - 10px);
+        height: 10px;
+        display: inline-block;
+        margin: 5px;
+      }
+
     </style>
   </head>
   
@@ -897,6 +907,18 @@
             <li><div class="sep"></div></li>
             <li><button id="forcePlayback" class="local" style="float:right;" disabled="disabled" title="Select a video in 'Playback & File Transfers' to activate playback.">➤&nbsp;Start Playback</button></li>
             <li><button id="micRem" class="local hidden" style="float:right;">Start Mic</button></li>
+	    <li><div class="pids-wrapper">
+	      <div class="pid"></div>
+	      <div class="pid"></div>
+ 	      <div class="pid"></div>
+  	      <div class="pid"></div>
+  	      <div class="pid"></div>
+  	      <div class="pid"></div>
+  	      <div class="pid"></div>
+  	      <div class="pid"></div>
+  	      <div class="pid"></div>
+  	      <div class="pid"></div>
+	    </div></li>
           </ul>
         </nav>
       </section>

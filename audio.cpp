@@ -6,8 +6,8 @@
 // I2S amplifiers are supported.
 //
 // If using I2S mic and I2S amp, then the following pins should be set to same values:
-// - micSckPin = mampBckIo
-// - micSWsPin = mampSwsIo
+// - i2sSckPin = i2sBckPin
+// - i2sWsPin = i2sLrcPin
 //
 // A remote microphone on a PC or phone can be used:
 // - for VoiceChanger app, this is used instead of local mic
@@ -41,7 +41,7 @@ i2s_port_t AMP_CHAN = I2S_NUM_0;
 
 bool micUse = false; // use local mic
 bool micRem = false; // use remote mic (depends on app)
-bool mampUse = false;
+bool ampUse = false;
 bool volatile stopAudio = false;
 
 // I2S devices
@@ -51,17 +51,17 @@ bool I2Smic; // true if I2S, false if PDM
 // I2S Microphone pins
 // INMP441 I2S microphone pinout, connect L/R to GND for left channel
 // MP34DT01 PDM microphone pinout, connect SEL to GND for left channel
-int micSckPin = -1; // I2S SCK
-int micSWsPin = -1; // I2S WS, PDM CLK
-int micSdPin = -1;  // I2S SD, PDM DAT
+int i2sSckPin = -1; // I2S SCK
+int i2sWsPin = -1; // I2S WS, PDM CLK
+int i2sSdiPin = -1;  // I2S SD, PDM DAT
 
 // I2S Amplifier pins
 // MAX98357A 
 // SD leave as mono (unconnected)
 // Gain: 100k to GND works, not direct to GND. Unconnected is 9 dB 
-int mampBckIo = -1; // I2S BCLK or SCK
-int mampSwsIo = -1;  // I2S LRCLK or WS
-int mampSdIo = -1;   // I2S DIN
+int i2sBckPin = -1; // I2S BCLK or SCK
+int i2sLrcPin = -1;  // I2S LRCLK or WS
+int i2sSdoPin = -1;   // I2S DIN
 
 int ampTimeout = 1000; // ms for amp write abandoned if no output
 uint32_t SAMPLE_RATE = 16000;  // audio rate in Hz
@@ -172,9 +172,9 @@ static bool setupMic() {
   // setup microphone based on its type, default I2S
   int i2sMode = I2S_MODE_MASTER | I2S_MODE_RX;
   i2s_mic_pins.mck_io_num = -1;
-  i2s_mic_pins.bck_io_num = micSckPin; 
-  i2s_mic_pins.ws_io_num = micSWsPin;
-  i2s_mic_pins.data_in_num = micSdPin;
+  i2s_mic_pins.bck_io_num = i2sSckPin; 
+  i2s_mic_pins.ws_io_num = i2sWsPin;
+  i2s_mic_pins.data_in_num = i2sSdiPin;
   i2s_mic_pins.data_out_num = I2S_PIN_NO_CHANGE;
 
   if (!I2Smic) {
@@ -204,9 +204,9 @@ static bool setupAmp() {
   // setup amplifier based on its type, default I2S
   int i2sMode = I2S_MODE_MASTER | I2S_MODE_TX;
   i2s_mic_pins.mck_io_num = -1;
-  i2s_amp_pins.bck_io_num = mampBckIo;
-  i2s_amp_pins.ws_io_num = mampSwsIo;
-  i2s_amp_pins.data_out_num = mampSdIo;
+  i2s_amp_pins.bck_io_num = i2sBckPin;
+  i2s_amp_pins.ws_io_num = i2sLrcPin;
+  i2s_amp_pins.data_out_num = i2sSdoPin;
   i2s_amp_pins.data_in_num = I2S_PIN_NO_CHANGE;
   
   // startup amp
@@ -257,11 +257,11 @@ static bool setupMic() {
   bool res;
   if (I2Smic) {
     // I2S mic and I2S amp can share same I2S channel
-    I2Sstd.setPins(micSckPin, micSWsPin, mampSdIo, micSdPin, -1); // BCLK/SCK, LRCLK/WS, SDOUT, SDIN, MCLK
+    I2Sstd.setPins(i2sSckPin, i2sWsPin, i2sSdoPin, i2sSdiPin, -1); // BCLK/SCK, LRCLK/WS, SDOUT, SDIN, MCLK
     res = I2Sstd.begin(I2S_MODE_STD, SAMPLE_RATE, I2S_DATA_BIT_WIDTH_16BIT, I2S_SLOT_MODE_MONO, I2S_STD_SLOT_LEFT);
   } else {
     // PDM mic need separate channel to I2S
-    I2Spdm.setPinsPdmRx(micSWsPin, micSdPin);
+    I2Spdm.setPinsPdmRx(i2sWsPin, i2sSdiPin);
     res = I2Spdm.begin(I2S_MODE_PDM_RX, SAMPLE_RATE, I2S_DATA_BIT_WIDTH_16BIT, I2S_SLOT_MODE_MONO, I2S_STD_SLOT_LEFT);
   }
   return res;
@@ -271,7 +271,7 @@ static bool setupAmp() {
   esp_err_t res;
   if (!micUse || !I2Smic) {
     // if not already started by setupMic()
-    I2Sstd.setPins(mampBckIo, mampSwsIo, mampSdIo, -1, -1); // BCLK/SCK, LRCLK/WS, SDOUT, SDIN, MCLK
+    I2Sstd.setPins(i2sBckPin, i2sLrcPin, i2sSdoPin, -1, -1); // BCLK/SCK, LRCLK/WS, SDOUT, SDIN, MCLK
     res = I2Sstd.begin(I2S_MODE_STD, SAMPLE_RATE, I2S_DATA_BIT_WIDTH_16BIT, I2S_SLOT_MODE_MONO, I2S_STD_SLOT_LEFT) ? ESP_OK : ESP_FAIL;
   } else res = ESP_OK; // already started by setupMic()
   return res == ESP_OK ? true : false;
@@ -448,7 +448,7 @@ static void VCaudioTask() {
       if (micUse && !micRem) makeRecording(); // make recording from local mic
     break;
     case PLAY_ACTION: 
-      if (mampUse) playRecording(); // play previous recording
+      if (ampUse) playRecording(); // play previous recording
     break;
     case PASS_ACTION:
       if (micUse && !micRem) {
@@ -557,24 +557,43 @@ void setI2Schan(int whichChan) {
 }
 
 static void predefPins() {
-#if defined(I2S_SD)
-    char micPin[3];
-    sprintf(micPin, "%d", I2S_SD);
-    updateStatus("micSWsPin", micPin);
-    sprintf(micPin, "%d", I2S_WS);
-    updateStatus("micSdPin", micPin);
-    sprintf(micPin, "%d", I2S_SCK);
-    updateStatus("micSckPin", micPin);
+#if defined(I2S_WS)
+    char i2sPin[3];
+    if (I2S_SDI){
+    sprintf(i2sPin, "%d", I2S_SDI);
+    updateStatus("i2sSdiPin", i2sPin);
+    sprintf(i2sPin, "%d", I2S_WS);
+    updateStatus("i2sWsPin", i2sPin);
+    sprintf(i2sPin, "%d", I2S_SCK);
+    updateStatus("i2sSckPin", i2sPin);
+    }
+    if (I2S_SDO){
+    sprintf(i2sPin, "%d", I2S_SDO);
+    updateStatus("i2sSdoPin", i2sPin);
+    #if ESP_ARDUINO_VERSION < ESP_ARDUINO_VERSION_VAL(3, 0, 0)
+      sprintf(i2sPin, "%d", I2S_LRC);
+      updateStatus("i2sLrcPin", i2sPin);
+      sprintf(i2sPin, "%d", I2S_BCK);
+      updateStatus("i2sBckPin", i2sPin);
+    #else
+      sprintf(i2sPin, "%d", I2S_WS);
+      updateStatus("i2sLrcPin", i2sPin);
+      sprintf(i2sPin, "%d", I2S_SCK);
+      updateStatus("i2sBckPin", i2sPin);
+    
+    #endif
+    }
 #endif
 
-  I2Smic = micSckPin == -1 ? false : true;
+  I2Smic = i2sSckPin == -1 ? false : true;
   
 #ifdef CONFIG_IDF_TARGET_ESP32S3
   MIC_CHAN = I2S_NUM_0;
 #endif
   
 #ifdef ISCAM
-  mampUse = false;
+  if (I2S_SDO)ampUse = true;
+  else ampUse = false;
 #endif
 }
 
@@ -592,7 +611,7 @@ static void micRemTask(void* parameter) {
 
 void micTaskStatus() {
   // task to handle remote mic
-  if (mampUse) {
+  if (ampUse) {
     wsBufferLen = 0;
     if (wsBuffer == NULL) wsBuffer = (uint8_t*)malloc(MAX_PAYLOAD_LEN);
     xTaskCreate(micRemTask, "micRemTask", MICREM_STACK_SIZE, NULL, MICREM_PRI, &micRemHandle);
@@ -620,7 +639,7 @@ static void audioTask(void* parameter) {
 bool prepAudio() {
   bool res = true; 
 #ifdef ISVC 
-  micUse = mampUse = true;
+  micUse = ampUse = true;
   micTaskStatus();
 #endif
 #ifdef ISCAM
@@ -631,29 +650,29 @@ bool prepAudio() {
     LOG_WRN("Only I2S devices supported on I2S_NUM_1");
     res = false;
   } else {
-    if (micUse && micSdPin <= 0) {
+    if (micUse && i2sSdiPin <= 0) {
       LOG_WRN("Microphone pins not defined");
       micUse = false;
     }
-    if (mampUse && mampSdIo <= 0) {
+    if (ampUse && i2sSdoPin <= 0) {
       LOG_WRN("Amplifier pins not defined");
-      mampUse = false;
+      ampUse = false;
     }
     if (micUse) {
       micUse = setupMic(); 
       if (!micUse) LOG_WRN("Unable to start mic");
     }
-    if (mampUse) {
-      mampUse = setupAmp();
-      if (!mampUse) LOG_WRN("Unable to start amp");
+    if (ampUse) {
+      ampUse = setupAmp();
+      if (!ampUse) LOG_WRN("Unable to start amp");
     }
     
-    if (micUse || mampUse) {
+    if (micUse || ampUse) {
       if (sampleBuffer == NULL) sampleBuffer = (int16_t*)malloc(sampleBytes);
       if (audioBuffer == NULL && psramFound()) audioBuffer = (uint8_t*)ps_malloc(psramMax + (sizeof(int16_t) * DMA_BUFF_LEN));
       xTaskCreate(audioTask, "audioTask", AUDIO_STACK_SIZE, NULL, AUDIO_PRI, &audioHandle);
       if (micUse) LOG_INF("Sound capture is available using %s mic on I2S%i", micLabels[I2Smic], MIC_CHAN);
-      if (mampUse) LOG_INF("Speaker output is available using I2S amp on I2S%i", AMP_CHAN);
+      if (ampUse) LOG_INF("Speaker output is available using I2S amp on I2S%i", AMP_CHAN);
       LOG_INF("Mic gain: %d, Amp volume: %d", micGain, ampVol); 
     } else res = false;
   }

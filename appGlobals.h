@@ -36,7 +36,8 @@ CAMERA_MODEL_ESP32S3_CAM_LCD
 
 // User's ESP32S3 cam board
 #elif defined(CONFIG_IDF_TARGET_ESP32S3)
-#define CAMERA_MODEL_FREENOVE_ESP32S3_CAM
+#define CAMERA_MODEL_XENOIONEX
+//#define CAMERA_MODEL_FREENOVE_ESP32S3_CAM
 //#define CAMERA_MODEL_XIAO_ESP32S3 
 #endif
 
@@ -364,12 +365,12 @@ extern int ds18b20Pin; // if INCLUDE_DS18B20 true
 extern int voltPin; 
 
 // microphone recording
-extern int micSckPin; // I2S SCK 
-extern int micSWsPin;  // I2S WS / PDM CLK
-extern int micSdPin;  // I2S SD / PDM DAT
-extern int mampBckIo; 
-extern int mampSwsIo;
-extern int mampSdIo;
+extern int i2sSckPin; // I2S SCK 
+extern int i2sWsPin;  // I2S WS / PDM CLK
+extern int i2sSdiPin; // I2S SD / PDM DAT
+extern int i2sSdoPin; // I2S SERIAL DATA OUT
+extern int i2sBckPin; // ONLY FOR CORE V2
+extern int i2sLrcPin; // ONLY FOR CORE V2
 extern volatile bool stopAudio;
 extern volatile audioAction THIS_ACTION;
 extern TaskHandle_t audioHandle;
@@ -390,7 +391,7 @@ extern int voltInterval;
 // audio
 extern uint32_t SAMPLE_RATE; // audio sample rate
 extern bool micRem;
-extern bool mampUse;
+extern bool ampUse;
 extern uint8_t PREAMP_GAIN; // microphone preamplification factor
 extern int8_t AMP_VOL; // amplifier volume factor
 

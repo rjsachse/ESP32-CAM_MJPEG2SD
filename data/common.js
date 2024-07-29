@@ -854,9 +854,26 @@
           if (!ws) initWebSocket();
           const context = new AudioContext();
           const source = context.createMediaStreamSource(micStream);
+    	  const analyser = context.createAnalyser();
+    	  const scriptProcessor = context.createScriptProcessor(2048, 1, 1);
           await context.audioWorklet.addModule('data:text/javascript;base64,' + btoa(audioWorkletScript));
           Resample = new AudioWorkletNode(context, "resample");;
           source.connect(Resample).connect(context.destination);
+
+    	  analyser.smoothingTimeConstant = 0.8;
+    	  analyser.fftSize = 1024;
+
+    	  microphone.connect(analyser);
+    	  analyser.connect(scriptProcessor);
+    	  scriptProcessor.connect(context.destination);
+    	  scriptProcessor.onaudioprocess = function() {
+      	    const array = new Uint8Array(analyser.frequencyBinCount);
+      	    analyser.getByteFrequencyData(array);
+      	    const arraySum = array.reduce((a, value) => a + value, 0);
+      	    const average = arraySum / array.length;
+      	    console.log(Math.round(average));
+      	    // colorPids(average);
+    	  };
 
           if (ws) {
             if (ws.readyState === WebSocket.OPEN) {
@@ -888,4 +905,17 @@
       
       function micRemState(value) {
         value ? runMic() : closeMic();
+      }
+
+      function colorPids(vol) {
+        const allPids = [...document.querySelectorAll('.pid')];
+        const numberOfPidsToColor = Math.round(vol / 10);
+        const pidsToColor = allPids.slice(0, numberOfPidsToColor);
+        for (const pid of allPids) {
+          pid.style.backgroundColor = "#e6e7e8";
+        }
+        for (const pid of pidsToColor) {
+          // console.log(pid[i]);
+          pid.style.backgroundColor = "#69ce2b";
+        }
       }

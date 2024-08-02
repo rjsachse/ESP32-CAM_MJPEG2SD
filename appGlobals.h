@@ -56,6 +56,7 @@ CAMERA_MODEL_ESP32S3_CAM_LCD
 #define INCLUDE_WEBDAV true  // webDav.cpp (WebDAV protocol)
 #define INCLUDE_EXTHB true   // externalHeartbeat.cpp (heartbeat to remote server)
 #define INCLUDE_PGRAM true   // photogram.cpp (photogrammetry feature)
+#define INCLUDE_USB true     // usb.cpp (USB Mass Storage SD Card)
 
 #define INCLUDE_TINYML false  // if true, requires relevant Edge Impulse TinyML Arduino library to be installed
 #define INCLUDE_DS18B20 false // if true, requires additional libraries: OneWire and DallasTemperature

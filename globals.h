@@ -174,6 +174,8 @@ float smoothSensor(float latestVal, float smoothedVal, float alpha);
 void startOTAtask();
 void startSecTimer(bool startTimer);
 bool startStorage();
+void startUsbMsc();
+void stopUsbMsc();
 void startWebServer();
 bool startWifi(bool firstcall = true);
 void stopPing();

@@ -94,6 +94,9 @@ bool startStorage() {
     res = prepSD_MMC();
     if (res) listFolder(DATA_DIR);
     else snprintf(startupFailure, SF_LEN, STARTUP_FAIL "Check SD card inserted");
+    #if INCLUDE_USB 
+      startUsbMsc();
+    #endif
     debugMemory("startStorage");
     return res; 
   }

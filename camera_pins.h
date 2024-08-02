@@ -164,7 +164,7 @@
 #define HREF_GPIO_NUM     23
 #define PCLK_GPIO_NUM     22
 
-// 4 for flash led or 33 for signal led    
+// 4 for flash led or 33 for signal led
 #define LED_GPIO_NUM      4
 
 #elif defined(CAMERA_MODEL_TTGO_T_JOURNAL)
@@ -207,7 +207,7 @@
 #define HREF_GPIO_NUM     47
 #define PCLK_GPIO_NUM     13
 //Define SD Pins
-#define SD_MMC_CLK 7 
+#define SD_MMC_CLK 7
 #define SD_MMC_CMD 9
 #define SD_MMC_D0 8
 //Define Mic Pins
@@ -218,7 +218,7 @@
 #elif defined(CAMERA_MODEL_ESP32_CAM_BOARD)
 #define CAM_BOARD "CAMERA_MODEL_ESP32_CAM_BOARD"
 // The 18 pin header on the board has Y5 and Y3 swapped
-#define USE_BOARD_HEADER 0 
+#define USE_BOARD_HEADER 0
 #define PWDN_GPIO_NUM    32
 #define RESET_GPIO_NUM   33
 #define XCLK_GPIO_NUM     4
@@ -318,11 +318,11 @@
 #if defined(CAMERA_MODEL_FREENOVE_ESP32S3_CAM)
 //Use WS2810
 #define USE_WS2812
-// 48 for flash led or 2 for signal led    
+// 48 for flash led or 2 for signal led
 #define LED_GPIO_NUM 48
 #endif
 //Define SD Pins
-#define SD_MMC_CLK 39 
+#define SD_MMC_CLK 39
 #define SD_MMC_CMD 38
 #define SD_MMC_D0 40
 //Define I2C Pins
@@ -412,30 +412,21 @@
 #define CAM_BOARD "CAMERA_MODEL_XENOIONEX"
 #define PWDN_GPIO_NUM    -1
 #define RESET_GPIO_NUM   -1
-<<<<<<< Updated upstream
-#define XCLK_GPIO_NUM    40
-#define SIOD_GPIO_NUM    8 // Can use other i2c SDA pin, set this to -1 ???
-#define SIOC_GPIO_NUM    9 // Can use other i2c SCL pin, set this to -1 ???
-
-#define Y9_GPIO_NUM      39 //D7
-#define Y8_GPIO_NUM      38 //D6
-=======
 #define XCLK_GPIO_NUM    1
 #define SIOD_GPIO_NUM    47 // Can use other i2c SDA pin, set this to -1 If not using i2c set to 8
 #define SIOC_GPIO_NUM    21 // Can use other i2c SCL pin, set this to -1 If not using i2c set to 9
 
 #define Y9_GPIO_NUM      3  //D7
 #define Y8_GPIO_NUM      18 //D6
->>>>>>> Stashed changes
 #define Y7_GPIO_NUM      42 //D5
-#define Y6_GPIO_NUM      45 //D4
-#define Y5_GPIO_NUM      2  //D3
-#define Y4_GPIO_NUM      47 //D2
-#define Y3_GPIO_NUM      1  //D1
-#define Y2_GPIO_NUM      46 //D0
-#define VSYNC_GPIO_NUM   21
-#define HREF_GPIO_NUM    10
-#define PCLK_GPIO_NUM    41
+#define Y6_GPIO_NUM      16 //D4
+#define Y5_GPIO_NUM      41 //D3
+#define Y4_GPIO_NUM      17 //D2
+#define Y3_GPIO_NUM      40 //D1
+#define Y2_GPIO_NUM      39 //D0
+#define VSYNC_GPIO_NUM   45
+#define HREF_GPIO_NUM    38
+#define PCLK_GPIO_NUM    2
 
 #define SD_MMC_CLK       13
 #define SD_MMC_CMD       12
@@ -452,11 +443,7 @@
 //#define I2S_BCK          3  // Bit Clock (BCLK) !!! Not needed as of Core V3
 //#define I2S_LRC          11  // Left Right Clcok (LRCLK) !!! Not needed as of Core V3
 
-<<<<<<< Updated upstream
-#define TRIGGER          15
-=======
 #define TRIGGER         15 // TRIGER FROM PIR OR RADAR
->>>>>>> Stashed changes
 
 #define USE_WS2812
 #define LED_GPIO_NUM     48
@@ -464,4 +451,3 @@
 #else
 #error "Camera model not selected"
 #endif
- 

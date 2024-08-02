@@ -412,12 +412,21 @@
 #define CAM_BOARD "CAMERA_MODEL_XENOIONEX"
 #define PWDN_GPIO_NUM    -1
 #define RESET_GPIO_NUM   -1
+<<<<<<< Updated upstream
 #define XCLK_GPIO_NUM    40
 #define SIOD_GPIO_NUM    8 // Can use other i2c SDA pin, set this to -1 ???
 #define SIOC_GPIO_NUM    9 // Can use other i2c SCL pin, set this to -1 ???
 
 #define Y9_GPIO_NUM      39 //D7
 #define Y8_GPIO_NUM      38 //D6
+=======
+#define XCLK_GPIO_NUM    1
+#define SIOD_GPIO_NUM    47 // Can use other i2c SDA pin, set this to -1 If not using i2c set to 8
+#define SIOC_GPIO_NUM    21 // Can use other i2c SCL pin, set this to -1 If not using i2c set to 9
+
+#define Y9_GPIO_NUM      3  //D7
+#define Y8_GPIO_NUM      18 //D6
+>>>>>>> Stashed changes
 #define Y7_GPIO_NUM      42 //D5
 #define Y6_GPIO_NUM      45 //D4
 #define Y5_GPIO_NUM      2  //D3
@@ -443,7 +452,11 @@
 //#define I2S_BCK          3  // Bit Clock (BCLK) !!! Not needed as of Core V3
 //#define I2S_LRC          11  // Left Right Clcok (LRCLK) !!! Not needed as of Core V3
 
+<<<<<<< Updated upstream
 #define TRIGGER          15
+=======
+#define TRIGGER         15 // TRIGER FROM PIR OR RADAR
+>>>>>>> Stashed changes
 
 #define USE_WS2812
 #define LED_GPIO_NUM     48

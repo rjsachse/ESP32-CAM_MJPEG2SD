@@ -112,6 +112,17 @@ bool updateAppStatus(const char* variable, const char* value, bool fromUser) {
   else if (!strcmp(variable, "micSckPin")) micSckPin = intVal;
   else if (!strcmp(variable, "micSWsPin")) micSWsPin = intVal;
   else if (!strcmp(variable, "micSdPin")) micSdPin = intVal;
+  else if (!strcmp(variable, "micRem")) {
+    micRem = (bool)intVal;
+    stopAudio = !micRem;
+  }
+  else if (!strcmp(variable, "mampUse")) {
+    mampUse = (bool)intVal;
+    micTaskStatus();
+  }
+  else if (!strcmp(variable, "mampBckIo")) mampBckIo = intVal;
+  else if (!strcmp(variable, "mampSwsIo")) mampSwsIo = intVal;
+  else if (!strcmp(variable, "mampSdIo")) mampSdIo = intVal;
 #endif
   else if (!strcmp(variable, "servoDelay")) servoDelay = intVal;
   else if (!strcmp(variable, "servoMinAngle")) servoMinAngle = intVal;
@@ -687,15 +698,19 @@ pirUse~0~3~C~Use PIR for detection
 lampUse~0~3~C~Use lamp
 lampType~0~3~S:Manual:PIR~How lamp activated
 servoUse~0~3~C~Use servos
-micUse~0~3~C~Use microphone
 pirPin~~3~N~Pin used for PIR
 lampPin~~3~N~Pin used for Lamp
 servoPanPin~~3~N~Pin used for Pan Servo
 servoTiltPin~~3~N~Pin used for Tilt Servo
 ds18b20Pin~~3~N~Pin used for DS18B20 temperature sensor
+micUse~0~3~C~Use microphone
 micSckPin~-1~3~N~pin for mic I2S SCK 
 micSWsPin~-1~3~N~pin for mic I2S WS, PDM CLK
 micSdPin~-1~3~N~pin for mic I2S SD, PDM DAT 
+mampBckIo~-1~3~N~Amplifier I2S BCLK pin
+mampSwsIo~-1~3~N~Amplifier I2S LRCLK pin
+mampSdIo~-1~3~N~Amplifier I2S DIN pin
+mampUse~0~3~C~Use amp & speaker for remote mic
 servoDelay~0~3~N~Delay between each 1 degree change (ms)
 servoMinAngle~0~3~N~Set min angle for servo model
 servoMaxAngle~180~3~N~Set max angle for servo model

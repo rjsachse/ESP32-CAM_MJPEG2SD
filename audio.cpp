@@ -557,12 +557,12 @@ void setI2Schan(int whichChan) {
 }
 
 static void predefPins() {
-#if defined(I2S_SD)
+#if defined(I2S_SDI)
     char micPin[3];
-    sprintf(micPin, "%d", I2S_SD);
-    updateStatus("micSWsPin", micPin);
-    sprintf(micPin, "%d", I2S_WS);
+    sprintf(micPin, "%d", I2S_SDI);
     updateStatus("micSdPin", micPin);
+    sprintf(micPin, "%d", I2S_WS);
+    updateStatus("micSWsPin", micPin);
     sprintf(micPin, "%d", I2S_SCK);
     updateStatus("micSckPin", micPin);
 #endif
@@ -571,10 +571,6 @@ static void predefPins() {
   
 #ifdef CONFIG_IDF_TARGET_ESP32S3
   MIC_CHAN = I2S_NUM_0;
-#endif
-  
-#ifdef ISCAM
-  mampUse = false;
 #endif
 }
 

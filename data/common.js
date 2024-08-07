@@ -797,16 +797,13 @@
       
       let micStream;
       let isMicStreaming = false;
-      const inSampleRate = 48000;
-      let outSampleRate = 16000;
-      let Resample;
+      let Stream;
       
-      function createAudioWorkletScript(sampleRateRatio) {
+      function createAudioWorkletScript() {
         return `
-          class Resample extends AudioWorkletProcessor {
+          class Stream extends AudioWorkletProcessor {
             constructor() {
               super();
-              this.sampleRateRatio = ${sampleRateRatio};
               this.port.onmessage = this.handleMessage.bind(this);
             }
             
@@ -817,51 +814,45 @@
               }
             }
 
-            resampleAudio(inputChannel) {
-              // resample 16 bit 46kHz to 16kHz
-              const outputLength = Math.round(inputChannel.length / this.sampleRateRatio);
-              const resampledData = new Int16Array(outputLength);
+            sampleAudio(inputChannel) {
+              const outputLength = inputChannel.length;
+              const sampledData = new Int16Array(outputLength);
               let outputIndex = 0;
               for (let i = 0; i < outputLength; i++) {
-                const inputIndex = Math.round(i * this.sampleRateRatio);
-                // Clamp the input index to avoid potential out-of-bounds access
-                const clampedIndex = Math.min(inputIndex, inputChannel.length - 1);
                 // convert float values -1 : 1 to 16 bit integers
-                resampledData[outputIndex++] = inputChannel[clampedIndex] * 32767;
+                sampledData[outputIndex++] = inputChannel[i] * 32767;
               }
-              return resampledData;
+              return sampledData;
             }
 
             process(inputs, outputs, parameters) {
               const inputChannel = inputs[0][0];
               if (!inputChannel || !inputChannel.length) return true; // empty data
-              
-              const resampledData = this.resampleAudio(inputChannel);
-              this.port.postMessage(resampledData);
+              const sampledData = this.sampleAudio(inputChannel);
+              this.port.postMessage(sampledData);
               return true;
             }
           }
-          registerProcessor("resample", Resample);
+          registerProcessor("stream", Stream);
         `;
       }
 
       async function runMic() {
         // start mic
-        const sampleRateRatio = inSampleRate / outSampleRate;
-        const audioWorkletScript = createAudioWorkletScript(sampleRateRatio);
+        const audioWorkletScript = createAudioWorkletScript();
         try {
           micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
           if (!ws) initWebSocket();
-          const context = new AudioContext();
+          const context = new AudioContext({sampleRate: 16000});
           const source = context.createMediaStreamSource(micStream);
           await context.audioWorklet.addModule('data:text/javascript;base64,' + btoa(audioWorkletScript));
-          Resample = new AudioWorkletNode(context, "resample");;
-          source.connect(Resample).connect(context.destination);
+          Stream = new AudioWorkletNode(context, "stream");;
+          source.connect(Stream).connect(context.destination);
 
           if (ws) {
             if (ws.readyState === WebSocket.OPEN) {
               isMicStreaming = true;
-              Resample.port.onmessage = function(event) {
+              Stream.port.onmessage = function(event) {
                 ws ? ws.send(event.data) : closeMic(); // Send the audio chunk 
               };
             }
@@ -880,8 +871,8 @@
           micStream.getTracks().forEach(track => track.stop()); // Close the microphone stream
           micStream = null;
         }
-        if (Resample && Resample.port) Resample.port.postMessage({ type: 'stop' }); // Send stop message
-        if (Resample) Resample.disconnect();
+        if (Stream && Stream.port) Stream.port.postMessage({ type: 'stop' }); // Send stop message
+        if (Stream) Stream.disconnect();
         try { micAction(false); } 
         catch (error) {}
       }

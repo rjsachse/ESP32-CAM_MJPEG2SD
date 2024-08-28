@@ -182,6 +182,7 @@ bool urlEncode(const char* inVal, char* encoded, size_t maxSize);
 uint32_t usePeripheral(const byte pinNum, const uint32_t receivedData);
 esp_sleep_wakeup_cause_t wakeupResetReason();
 bool wsAsyncSend(const char* wsData);
+void wsAsyncSendAudio(uint8_t *data, size_t len);
 // mqtt.cpp
 void startMqttClient();  
 void stopMqttClient();  

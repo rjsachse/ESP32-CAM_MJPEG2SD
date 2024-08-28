@@ -227,6 +227,30 @@ static void ampOutputRem() {
   wsBufferLen = 0;
 }
 
+static void micInputRem() {
+  // input from mic to remote speaker
+  if (!stopAudio) {
+    if (ampRem || twoWayRem) {
+      size_t bytes_read;
+      bytes_read = micInput();
+      if (bytes_read > 0) {
+        wsAsyncSendAudio(audioWsBuffer, bytes_read);
+      }
+    }
+  }
+}
+
+void sendAudioTask(void * parameter) {
+  int16_t processedSample[SAMPLE_BUFFER_SIZE];
+  while (true) {
+    if (audioStreaming) {
+      if (xQueueReceive(processedAudioQueue, processedSample, portMAX_DELAY) == pdPASS) {
+        webSocket.broadcastBIN((uint8_t*)processedSample, sizeof(processedSample)); // Send processed sample over WebSocket
+      }
+    }
+    vTaskDelay(10 / portTICK_PERIOD_MS); // Adjust delay as needed
+  }
+}
 /*********************************************************************/
 
 #ifdef ISVC
@@ -459,6 +483,28 @@ void micTaskStatus() {
   }
 }
 
+void twoWayAudioTaskStatus() {
+    // task to handle remote mic and amp
+    if (mampUse) {
+        wsBufferLen = 0;
+        if (wsBuffer == NULL) wsBuffer = (uint8_t*)malloc(MAX_PAYLOAD_LEN);
+        xTaskCreate(micRemTask, "micRemTask", MICREM_STACK_SIZE, NULL, MICREM_PRI, &micRemHandle);
+        xTaskCreate(ampRemTask, "ampRemTask", AMPREM_STACK_SIZE, NULL, AMPREM_PRI, &ampRemHandle);
+        // Create the timer
+        // myTimer = xTimerCreate("My Timer", pdMS_TO_TICKS(1000), pdTRUE, (void *)0, myTimerCallback);
+        // // Start the timer
+        // if (myTimer != NULL) {
+        //     xTimerStart(myTimer, 0);
+        // }
+        //stopRemAudio();
+    } else {
+        if (micRemHandle != NULL) {
+            vTaskDelete(micRemHandle);
+            micRemHandle = NULL;
+        }
+    }
+}
+
 static void audioTask(void* parameter) {
   while (true) {
     ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
@@ -506,6 +552,7 @@ bool prepAudio() {
     if (micUse || mampUse) {
       if (sampleBuffer == NULL) sampleBuffer = (int16_t*)malloc(sampleBytes);
       if (audioBuffer == NULL && psramFound()) audioBuffer = (uint8_t*)ps_malloc(psramMax + (sizeof(int16_t) * DMA_BUFF_LEN));
+      if (audioWsBuffer == NULL && psramFound()) audioWsBuffer = (uint8_t*)ps_malloc(psramMax + (sizeof(int16_t) * DMA_BUFF_LEN));
       xTaskCreate(audioTask, "audioTask", AUDIO_STACK_SIZE, NULL, AUDIO_PRI, &audioHandle);
       if (micUse) LOG_INF("Sound capture is available using %s mic on I2S%i with gain %d", micLabels[I2Smic], MIC_CHAN, micGain);
       if (mampUse) LOG_INF("Speaker output is available using I2S amp on I2S%i with vol %d", AMP_CHAN, ampVol);

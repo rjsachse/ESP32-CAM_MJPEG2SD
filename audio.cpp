@@ -38,6 +38,7 @@ i2s_port_t AMP_CHAN = I2S_NUM_0;
 bool micUse = false; // use local mic
 bool micRem = false; // use remote mic (depends on app)
 bool mampUse = false;
+uint8_t remAudio = 0; // use remote mic (depends on app)
 bool volatile stopAudio = false;
 
 // I2S devices
@@ -66,7 +67,9 @@ int8_t ampVol = 3; // amplifier volume factor
 
 TaskHandle_t audioHandle = NULL;
 static TaskHandle_t micRemHandle = NULL;
+static TaskHandle_t ampRemHandle = NULL;
 
+uint8_t* audioWsBuffer = NULL;
 uint8_t* audioBuffer = NULL;
 static size_t audioBytesUsed = 0;
 static int totalSamples = 0;
@@ -414,12 +417,12 @@ void setI2Schan(int whichChan) {
 }
 
 static void predefPins() {
-#if defined(I2S_SD)
+#if defined(I2S_SDI)
     char micPin[3];
-    sprintf(micPin, "%d", I2S_SD);
-    updateStatus("micSWsPin", micPin);
-    sprintf(micPin, "%d", I2S_WS);
+    sprintf(micPin, "%d", I2S_SDI);
     updateStatus("micSdPin", micPin);
+    sprintf(micPin, "%d", I2S_WS);
+    updateStatus("micSWsPin", micPin);
     sprintf(micPin, "%d", I2S_SCK);
     updateStatus("micSckPin", micPin);
 #endif
@@ -430,9 +433,6 @@ static void predefPins() {
   MIC_CHAN = I2S_NUM_0;
 #endif
   
-#ifdef ISCAM
-  mampUse = false;
-#endif
 }
 
 static void micRemTask(void* parameter) {

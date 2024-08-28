@@ -27,7 +27,7 @@
 
 // User's ESP32S3 cam board
 #elif defined(CONFIG_IDF_TARGET_ESP32S3)
-#define CAMERA_MODEL_FREENOVE_ESP32S3_CAM
+//#define CAMERA_MODEL_FREENOVE_ESP32S3_CAM
 //#define CAMERA_MODEL_XIAO_ESP32S3 
 //#define CAMERA_MODEL_NEW_ESPS3_RE1_0
 //#define CAMERA_MODEL_M5STACK_CAMS3_UNIT
@@ -35,6 +35,7 @@
 //#define CAMERA_MODEL_ESP32S3_CAM_LCD
 //#define CAMERA_MODEL_DFRobot_FireBeetle2_ESP32S3
 //#define CAMERA_MODEL_DFRobot_Romeo_ESP32S3
+#define CAMERA_MODEL_XENOIONEX
 //#define AUXILIARY
 #endif
 
@@ -167,6 +168,7 @@
 #define LOG_STACK_SIZE (1024 * 3)
 #define AUDIO_STACK_SIZE (1024 * 4)
 #define MICREM_STACK_SIZE (1024 * 2)
+#define AMPREM_STACK_SIZE (1024 * 2)
 #define MQTT_STACK_SIZE (1024 * 4)
 #define PING_STACK_SIZE (1024 * 5)
 #define PLAYBACK_STACK_SIZE (1024 * 2)
@@ -180,6 +182,7 @@
 #define SUSTAIN_PRI 5
 #define HTTP_PRI 5
 #define MICREM_PRI 5
+#define AMPREM_PRI 5
 #define STICK_PRI 5
 #define PLAY_PRI 4
 #define TELEM_PRI 3
@@ -234,6 +237,7 @@ bool haveWavFile(bool isTL = false);
 bool isNight(uint8_t nightSwitch);
 void keepFrame(camera_fb_t* fb);
 void micTaskStatus();
+void twoWayAudioTaskStatus();
 void motorSpeed(int speedVal, bool leftMotor = true);
 void openSDfile(const char* streamFile);
 bool prepAudio();
@@ -333,6 +337,7 @@ extern byte* streamBuffer[]; // buffer for stream frame
 extern size_t motionJpegLen;
 extern uint8_t* motionJpeg;
 extern uint8_t* audioBuffer;
+extern uint8_t* audioWsBuffer;
 extern char srtBuffer[];
 extern size_t srtBytes;
 
@@ -396,6 +401,7 @@ extern int voltInterval;
 extern uint32_t SAMPLE_RATE; // audio sample rate
 extern bool micRem;
 extern bool mampUse;
+extern uint8_t remAudio;
 extern uint8_t PREAMP_GAIN; // microphone preamplification factor
 extern int8_t AMP_VOL; // amplifier volume factor
 

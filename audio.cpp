@@ -159,6 +159,7 @@ static size_t micInput() {
     sampleBuffer[i] = constrain(sampleBuffer[i] * gainFactor, SHRT_MIN, SHRT_MAX);
   }
   if (doStreamCapture && !audioBytesUsed) memcpy(audioBuffer, sampleBuffer, bytesRead);
+  if (remAudio > 1) memcpy(audioWsBuffer, sampleBuffer, bytesRead);
   return bytesRead;
 }
 
@@ -194,7 +195,8 @@ size_t updateWavHeader() {
 
 void remoteMicHandler(uint8_t* wsMsg, size_t wsMsgLen) {
   // input from remote mic via websocket
-  if (!stopAudio && !wsBufferLen) {
+  //if (!stopAudio && !wsBufferLen) {
+  if (!stopAudio) {
     memcpy(wsBuffer, wsMsg, wsMsgLen);
     wsBufferLen = wsMsgLen;
     if (micRemHandle != NULL) xTaskNotifyGive(micRemHandle);
@@ -230,9 +232,11 @@ static void ampOutputRem() {
 static void micInputRem() {
   // input from mic to remote speaker
   if (!stopAudio) {
-    if (ampRem || twoWayRem) {
-      size_t bytes_read;
-      bytes_read = micInput();
+    if (remAudio > 1) {
+      if (!captureRunning) {
+        size_t bytes_read;
+        bytes_read = micInput();
+      }
       if (bytes_read > 0) {
         wsAsyncSendAudio(audioWsBuffer, bytes_read);
       }
@@ -240,17 +244,6 @@ static void micInputRem() {
   }
 }
 
-void sendAudioTask(void * parameter) {
-  int16_t processedSample[SAMPLE_BUFFER_SIZE];
-  while (true) {
-    if (audioStreaming) {
-      if (xQueueReceive(processedAudioQueue, processedSample, portMAX_DELAY) == pdPASS) {
-        webSocket.broadcastBIN((uint8_t*)processedSample, sizeof(processedSample)); // Send processed sample over WebSocket
-      }
-    }
-    vTaskDelay(10 / portTICK_PERIOD_MS); // Adjust delay as needed
-  }
-}
 /*********************************************************************/
 
 #ifdef ISVC
@@ -462,12 +455,22 @@ static void predefPins() {
 static void micRemTask(void* parameter) {
   while (true) {
     ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
-    if (micRem) {
+    if (remAudio == 1 || remAudio == 3) {
       if (THIS_ACTION == PASS_ACTION) ampOutputRem();
 #ifdef ISVC
       else if (THIS_ACTION == RECORD_ACTION) makeRecordingRem(true);
 #endif
     }
+  }
+}
+
+static void ampRemTask(void* parameter) {
+  while (true) {
+    //ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
+    if (remAudio > 1) {
+      if (THIS_ACTION == PASS_ACTION) micInputRem();
+    }
+    vTaskDelay(pdMS_TO_TICKS(1));
   }
 }
 

@@ -233,8 +233,11 @@ static void micInputRem() {
   // input from mic to remote speaker
   if (!stopAudio) {
     if (remAudio > 1) {
-      size_t bytes_read;
-      bytes_read = micInput();
+    if (!captureRunning) {
+      if (!captureRunning) {
+        size_t bytes_read;
+        bytes_read = micInput();
+      }
       if (bytes_read > 0) {
         wsAsyncSendAudio(audioWsBuffer, bytes_read);
       }

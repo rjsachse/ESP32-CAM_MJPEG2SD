@@ -123,10 +123,6 @@ bool updateAppStatus(const char* variable, const char* value, bool fromUser) {
   else if (!strcmp(variable, "micSckPin")) micSckPin = intVal;
   else if (!strcmp(variable, "micSWsPin")) micSWsPin = intVal;
   else if (!strcmp(variable, "micSdPin")) micSdPin = intVal;
-  else if (!strcmp(variable, "micRem")) {
-    micRem = (bool)intVal;
-    stopAudio = !micRem;
-  }
   else if (!strcmp(variable, "remAudio")) {
     LOG_INF("Remote Audio %u", intVal);
     remAudio = intVal;

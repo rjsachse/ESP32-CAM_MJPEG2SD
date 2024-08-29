@@ -380,6 +380,21 @@ bool wsAsyncSend(const char* wsData) {
   return false;
 }
 
+void wsAsyncSendAudio(uint8_t *data, size_t len) {
+  // websockets send function, used for async logging and status updates
+  if (fdWs >= 0) {
+    // send if connection active
+    //LOG_INF("websocket audio length  %u", bytesRead);
+    httpd_ws_frame_t wsPkt;
+    memset(&wsPkt, 0, sizeof(httpd_ws_frame_t));
+    wsPkt.type = HTTPD_WS_TYPE_BINARY;
+    wsPkt.payload = data;
+    wsPkt.len = len;
+    esp_err_t ret = httpd_ws_send_frame_async(httpServer, fdWs, &wsPkt);
+    if (ret != ESP_OK) LOG_WRN("websocket send failed with %s", esp_err_to_name(ret));
+  } // else ignore
+}
+
 static esp_err_t wsHandler(httpd_req_t *req) {
   // receive websocket data and determine response
   // if a new connection is received, the old connection is closed, but the browser

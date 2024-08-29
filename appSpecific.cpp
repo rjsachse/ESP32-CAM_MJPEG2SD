@@ -133,6 +133,7 @@ bool updateAppStatus(const char* variable, const char* value, bool fromUser) {
     if (intVal = 0) stopAudio = true;
     else stopAudio = false;
     LOG_INF("Remote Audio stpped %u", stopAudio);
+  }
   else if (!strcmp(variable, "mampUse")) {
     mampUse = (bool)intVal;
     //micTaskStatus();

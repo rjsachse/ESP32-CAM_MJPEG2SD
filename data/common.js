@@ -32,6 +32,8 @@
         const smallThumbSize = parseFloat(root.getPropertyValue('--smallThumbSize')) * baseFontSize;
         let isImmed = false;
         let logType = appLogInit;
+        let audioTimeout;
+        const TIMEOUT_DURATION = 1000; // 1 seconds, adjust as needed
 
         async function initialise() {
           try {
@@ -81,7 +83,21 @@
 
         // process received WS message
         function onMessage(messageEvent) {
-          if (messageEvent.data.startsWith("{")) {
+          console.log(messageEvent.data)
+          if (messageEvent.data instanceof ArrayBuffer) {
+            console.log("Received audio data as ArrayBuffer");
+            const arrayBuffer = messageEvent.data;
+            const pcmData = new Int16Array(arrayBuffer);
+            const float32Data = new Float32Array(pcmData.length);
+            for (let i = 0; i < pcmData.length; i++) {
+              float32Data[i] = pcmData[i] / 32768; // Convert to float32
+            }
+            playAudio(float32Data);
+            // Reset the timeout
+            clearTimeout(audioTimeout);
+            audioTimeout = setTimeout(stopAudio, TIMEOUT_DURATION);
+
+          } else if (typeof messageEvent.data === 'string' && messageEvent.data.startsWith("{")) {
             // json data
             updateData = JSON.parse(messageEvent.data);
             let filter = updateData.cfgGroup;
@@ -394,8 +410,9 @@
           // click events
           document.addEventListener("click", function (event) {
             const e = event.target;
+            if (e.classList.contains('remAudio')) processStatus(ID, 'remAudio', e.value);
             // svg rect elements, use id of its following text node
-            if (e.nodeName == 'rect') processStatus(ID, e.nextElementSibling.id, 1);
+            else if (e.nodeName == 'rect') processStatus(ID, e.nextElementSibling.id, 1);
             // tab buttons, use name as target id 
             else if (e.classList.contains('tablinks')) openTab(e);
             // other buttons
@@ -792,18 +809,20 @@
       // Go to : chrome://flags/#unsafely-treat-insecure-origin-as-secure
       // Enter following URL in box: http://<app_ip_address>
 
+      let audioContext;
       let micStream;
       let isMicStreaming = false;
-      const inSampleRate = 48000;
-      let outSampleRate = 16000;
-      let Resample;
+      let Stream;
+      let micGainNode;
+      let speakerGainNode;
+      let micAnalyser;
+      let speakerAnalyser;
 
-      function createAudioWorkletScript(sampleRateRatio) {
+      function createAudioWorkletScript() {
         return `
-          class Resample extends AudioWorkletProcessor {
+          class Stream extends AudioWorkletProcessor {
             constructor() {
               super();
-              this.sampleRateRatio = ${sampleRateRatio};
               this.port.onmessage = this.handleMessage.bind(this);
             }
             
@@ -813,56 +832,66 @@
                 return;
               }
             }
-
-            resampleAudio(inputChannel) {
-              // resample 16 bit 46kHz to 16kHz
-              const outputLength = Math.round(inputChannel.length / this.sampleRateRatio);
-              const resampledData = new Int16Array(outputLength);
+            sampleAudio(inputChannel) {
+              const outputLength = inputChannel.length;
+              const sampledData = new Int16Array(outputLength);
               let outputIndex = 0;
               for (let i = 0; i < outputLength; i++) {
-                const inputIndex = Math.round(i * this.sampleRateRatio);
-                // Clamp the input index to avoid potential out-of-bounds access
-                const clampedIndex = Math.min(inputIndex, inputChannel.length - 1);
                 // convert float values -1 : 1 to 16 bit integers
-                resampledData[outputIndex++] = inputChannel[clampedIndex] * 32767;
+                sampledData[outputIndex++] = inputChannel[i] * 32767;
               }
-              return resampledData;
+              return sampledData;
             }
-
             process(inputs, outputs, parameters) {
               const inputChannel = inputs[0][0];
               if (!inputChannel || !inputChannel.length) return true; // empty data
-              
-              const resampledData = this.resampleAudio(inputChannel);
-              this.port.postMessage(resampledData);
+              const sampledData = this.sampleAudio(inputChannel);
+              this.port.postMessage(sampledData);
               return true;
             }
           }
-          registerProcessor("resample", Resample);
+          registerProcessor("stream", Stream);
         `;
+      }
+
+      async function startAudio() {
+          if (!audioContext || audioContext.state === 'closed') {
+              audioContext = await new AudioContext({ sampleRate: 16000 });
+              console.log('AudioContext open');
+          }
+      }
+      
+      function stopAudio() {
+          if (audioContext && audioContext.state !== 'closed') {
+              audioContext.close().then(() => {
+                  console.log('AudioContext closed');
+              });
+          }
       }
 
       async function runMic() {
         // start mic
-        const sampleRateRatio = inSampleRate / outSampleRate;
-        const audioWorkletScript = createAudioWorkletScript(sampleRateRatio);
+        const audioWorkletScript = createAudioWorkletScript();
         try {
-          micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          await startAudio(); // Ensure the AudioContext is open
+          micStream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false } });
           if (!ws) initWebSocket();
-          const context = new AudioContext();
-          const source = context.createMediaStreamSource(micStream);
-          await context.audioWorklet.addModule('data:text/javascript;base64,' + btoa(audioWorkletScript));
-          Resample = new AudioWorkletNode(context, "resample");;
-          source.connect(Resample).connect(context.destination);
-
+          micGainNode = audioContext.createGain();
+          micGainNode.gain.value = 0.5; // Initial mic gain value
+          micAnalyser = audioContext.createAnalyser();
+          const source = audioContext.createMediaStreamSource(micStream);
+          await audioContext.audioWorklet.addModule('data:text/javascript;base64,' + btoa(audioWorkletScript));
+          Stream = new AudioWorkletNode(audioContext, "stream");;
+          source.connect(micGainNode).connect(micAnalyser).connect(Stream).connect(audioContext.destination);
           if (ws) {
             if (ws.readyState === WebSocket.OPEN) {
               isMicStreaming = true;
-              Resample.port.onmessage = function(event) {
+              Stream.port.onmessage = function(event) {
                 ws ? ws.send(event.data) : closeMic(); // Send the audio chunk 
               };
             }
           }
+          //visualizeMic(); // Start visualizing the microphone input
         } catch (error) {
           alert("Chrome needs security exception for " + baseHost);
         }
@@ -877,12 +906,90 @@
           micStream.getTracks().forEach(track => track.stop()); // Close the microphone stream
           micStream = null;
         }
-        if (Resample && Resample.port) Resample.port.postMessage({ type: 'stop' }); // Send stop message
-        if (Resample) Resample.disconnect();
-        try { micAction(false); } 
-        catch (error) {}
+        if (Stream && Stream.port) Stream.port.postMessage({ type: 'stop' }); // Send stop message
+        if (Stream) Stream.disconnect();
       }
 
-      function micRemState(value) {
-        value ? runMic() : closeMic();
+      async function remAudioState(value) {
+        if (value == 2) {
+          console.log("start speaker");
+          await startAudio(); // Ensure the AudioContext is open
+        } else if (value == 1 || value == 3) {
+          console.log("start mic");
+          await startAudio(); // Ensure the AudioContext is open
+          runMic();
+        } else if (value == 0) {
+            if (ws) ws.send('X');
+            console.log("stop audio");
+            closeMic();
+            clearTimeout(audioTimeout);
+            audioTimeout = setTimeout(stopAudio, TIMEOUT_DURATION);
+        }
+      }
+
+      async function playAudio(float32Data) {
+        await startAudio(); // Ensure the AudioContext is open
+        const audioBuffer = audioContext.createBuffer(2, float32Data.length, 16000);
+        audioBuffer.getChannelData(0).set(float32Data); // Left channel
+        audioBuffer.getChannelData(1).set(float32Data); // Right channel
+        const source = audioContext.createBufferSource();
+        source.buffer = audioBuffer;
+        speakerGainNode = audioContext.createGain();
+        speakerGainNode.gain.value = 3; // Initial speaker gain value
+        speakerAnalyser = audioContext.createAnalyser();
+        source.connect(speakerGainNode).connect(speakerAnalyser).connect(audioContext.destination);
+        source.start();
+
+        //visualizeSpeaker();
+        // Reset the timeout
+        clearTimeout(audioTimeout);
+        audioTimeout = setTimeout(stopAudio, TIMEOUT_DURATION);
+      }
+
+      function visualizeMic() {
+        const canvas = document.getElementById('micVisualizer');
+        const canvasCtx = canvas.getContext('2d');
+        micAnalyser.fftSize = 256;
+        const bufferLength = micAnalyser.frequencyBinCount;
+        const dataArray = new Uint8Array(bufferLength);
+        function draw() {
+          requestAnimationFrame(draw);
+          micAnalyser.getByteFrequencyData(dataArray);
+          canvasCtx.fillStyle = 'rgb(0, 0, 0)';
+          canvasCtx.fillRect(0, 0, canvas.width, canvas.height);
+          const barWidth = (canvas.width / bufferLength) * 2.5;
+          let barHeight;
+          let x = 0;
+          for (let i = 0; i < bufferLength; i++) {
+            barHeight = dataArray[i];
+            canvasCtx.fillStyle = 'rgb(' + (barHeight + 100) + ',50,50)';
+            canvasCtx.fillRect(x, canvas.height - barHeight / 2, barWidth, barHeight / 2);
+            x += barWidth + 1;
+          }
+        }
+        draw();
+      }
+
+      function visualizeSpeaker() {
+        const canvas = document.getElementById('speakerVisualizer');
+        const canvasCtx = canvas.getContext('2d');
+        speakerAnalyser.fftSize = 256;
+        const bufferLength = speakerAnalyser.frequencyBinCount;
+        const dataArray = new Uint8Array(bufferLength);
+        function draw() {
+          requestAnimationFrame(draw);
+          speakerAnalyser.getByteFrequencyData(dataArray);
+          canvasCtx.fillStyle = 'rgb(0, 0, 0)';
+          canvasCtx.fillRect(0, 0, canvas.width, canvas.height);
+          const barWidth = (canvas.width / bufferLength) * 2.5;
+          let barHeight;
+          let x = 0;
+          for (let i = 0; i < bufferLength; i++) {
+            barHeight = dataArray[i];
+            canvasCtx.fillStyle = 'rgb(' + (barHeight + 100) + ',50,50)';
+            canvasCtx.fillRect(x, canvas.height - barHeight / 2, barWidth, barHeight / 2);
+            x += barWidth + 1;
+          }
+        }
+        draw();
       }

@@ -84,6 +84,7 @@
 
         // process received WS message
         function onMessage(messageEvent) {
+          console.log(messageEvent.data);
           if (messageEvent.data instanceof ArrayBuffer) {
             console.log("Received audio data as ArrayBuffer");
             const arrayBuffer = messageEvent.data;
@@ -861,6 +862,7 @@
               const inputChannel = inputs[0][0];
               if (!inputChannel || !inputChannel.length) return true; // empty data
               const sampledData = this.sampleAudio(inputChannel);
+              console.log(sampledData);
               this.port.postMessage(sampledData);
               return true;
             }
@@ -904,6 +906,7 @@
             if (ws.readyState === WebSocket.OPEN) {
               isMicStreaming = true;
               Stream.port.onmessage = function(event) {
+                console.log(event.data);
                 ws ? ws.send(event.data) : closeMic(); // Send the audio chunk 
               };
             }

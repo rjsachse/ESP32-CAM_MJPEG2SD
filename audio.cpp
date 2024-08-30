@@ -213,7 +213,7 @@ void applyMicRemGain() {
 static void ampOutputRem() {
   // output to speaker from remote mic
   static int bytesCtr = 0;
-  applyMicRemGain();
+  //applyMicRemGain();
 #ifdef ISVC
   applyFilters();
 #endif
@@ -233,13 +233,11 @@ static void micInputRem() {
   // input from mic to remote speaker
   if (!stopAudio) {
     if (remAudio > 1) {
+      size_t bytes_read;
       if (!captureRunning) {
-        size_t bytes_read;
         bytes_read = micInput();
       }
-      if (bytes_read > 0) {
-        wsAsyncSendAudio(audioWsBuffer, bytes_read);
-      }
+      wsAsyncSendAudio(audioWsBuffer, bytes_read);
     }
   }
 }
@@ -493,13 +491,6 @@ void twoWayAudioTaskStatus() {
         if (wsBuffer == NULL) wsBuffer = (uint8_t*)malloc(MAX_PAYLOAD_LEN);
         xTaskCreate(micRemTask, "micRemTask", MICREM_STACK_SIZE, NULL, MICREM_PRI, &micRemHandle);
         xTaskCreate(ampRemTask, "ampRemTask", AMPREM_STACK_SIZE, NULL, AMPREM_PRI, &ampRemHandle);
-        // Create the timer
-        // myTimer = xTimerCreate("My Timer", pdMS_TO_TICKS(1000), pdTRUE, (void *)0, myTimerCallback);
-        // // Start the timer
-        // if (myTimer != NULL) {
-        //     xTimerStart(myTimer, 0);
-        // }
-        //stopRemAudio();
     } else {
         if (micRemHandle != NULL) {
             vTaskDelete(micRemHandle);

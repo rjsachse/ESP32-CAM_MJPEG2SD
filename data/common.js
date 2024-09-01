@@ -84,9 +84,7 @@
 
         // process received WS message
         function onMessage(messageEvent) {
-          console.log(messageEvent.data);
           if (messageEvent.data instanceof ArrayBuffer) {
-            console.log("Received audio data as ArrayBuffer");
             const arrayBuffer = messageEvent.data;
             const pcmData = new Int16Array(arrayBuffer);
             const float32Data = new Float32Array(pcmData.length);
@@ -818,21 +816,7 @@
       let speakerGainNode;
       let micAnalyser;
       let speakerAnalyser;
-
-      async function startAudio() {
-          if (!audioContext || audioContext.state === 'closed') {
-              audioContext = await new AudioContext({ sampleRate: 16000 });
-              console.log('AudioContext open');
-          }
-      }
-
-      function stopAudio() {
-          if (audioContext && audioContext.state !== 'closed') {
-              audioContext.close().then(() => {
-                  console.log('AudioContext closed');
-              });
-          }
-      }
+      let micDelayNode;
 
       function createAudioWorkletScript() {
         return `
@@ -862,7 +846,6 @@
               const inputChannel = inputs[0][0];
               if (!inputChannel || !inputChannel.length) return true; // empty data
               const sampledData = this.sampleAudio(inputChannel);
-              console.log(sampledData);
               this.port.postMessage(sampledData);
               return true;
             }
@@ -874,14 +857,12 @@
       async function startAudio() {
           if (!audioContext || audioContext.state === 'closed') {
               audioContext = await new AudioContext({ sampleRate: 16000 });
-              console.log('AudioContext open');
           }
       }
       
       function stopAudio() {
           if (audioContext && audioContext.state !== 'closed') {
               audioContext.close().then(() => {
-                  console.log('AudioContext closed');
               });
           }
       }
@@ -892,26 +873,27 @@
         try {
           await startAudio(); // Ensure the AudioContext is open
           micStream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false } });
-          if (!ws) initWebSocket();
-          startAudio();
+          if (!wsSkt[0]) initWebSocket();
           micGainNode = audioContext.createGain();
           micGainNode.gain.value = 1; // Initial mic gain value
+          micDelayNode = audioContext.createDelay();
+          micDelayNode.delayTime.value = 1; // 100ms delay
           micAnalyser = audioContext.createAnalyser();
           const source = audioContext.createMediaStreamSource(micStream);
           await audioContext.audioWorklet.addModule('data:text/javascript;base64,' + btoa(audioWorkletScript));
           Stream = new AudioWorkletNode(audioContext, "stream");;
-          source.connect(micGainNode).connect(micAnalyser).connect(Stream).connect(audioContext.destination);
+          source.connect(micGainNode).connect(micAnalyser).connect(micDelayNode).connect(Stream).connect(audioContext.destination);
 
-          if (ws) {
-            if (ws.readyState === WebSocket.OPEN) {
+          wsSkt.forEach((element, index) => {
+            if (wsSkt[index] && wsSkt[index].readyState === WebSocket.OPEN) {
               isMicStreaming = true;
               Stream.port.onmessage = function(event) {
-                console.log(event.data);
-                ws ? ws.send(event.data) : closeMic(); // Send the audio chunk 
+                const dataSize = event.data.length;
+                wsSkt[index] ? wsSkt[index].send(event.data) : closeMic(); // Send the audio chunk 
               };
             }
-          }
-          //visualizeMic(); // Start visualizing the microphone input
+            });
+          visualizeMic(); // Start visualizing the microphone input
         } catch (error) {
           alert("Chrome needs security exception for " + baseHost);
         }
@@ -920,7 +902,9 @@
       function closeMic() {
         // stop streaming
         isMicStreaming = false;
-        if (ws) ws.send('X');
+        wsSkt.forEach((element, index) => {
+          if (wsSkt[index] && wsSkt[index].readyState === WebSocket.OPEN) wsSkt[index].send("X");
+        });
         // close down mic
         if (micStream) {
           micStream.getTracks().forEach(track => track.stop()); // Close the microphone stream
@@ -932,15 +916,12 @@
 
       async function remAudioState(value) {
         if (value == 2) {
-          console.log("start speaker");
           await startAudio(); // Ensure the AudioContext is open
         } else if (value == 1 || value == 3) {
-          console.log("start mic");
           await startAudio(); // Ensure the AudioContext is open
           runMic();
         } else if (value == 0) {
             if (ws) ws.send('X');
-            console.log("stop audio");
             closeMic();
             clearTimeout(audioTimeout);
             audioTimeout = setTimeout(stopAudio, TIMEOUT_DURATION);
@@ -968,26 +949,16 @@
       }
 
       function visualizeMic() {
-        const canvas = document.getElementById('micVisualizer');
-        const canvasCtx = canvas.getContext('2d');
+        const volumeLevel = document.getElementById('volumeLevel');
         micAnalyser.fftSize = 256;
         const bufferLength = micAnalyser.frequencyBinCount;
         const dataArray = new Uint8Array(bufferLength);
-
+      
         function draw() {
           requestAnimationFrame(draw);
           micAnalyser.getByteFrequencyData(dataArray);
-          canvasCtx.fillStyle = 'rgb(0, 0, 0)';
-          canvasCtx.fillRect(0, 0, canvas.width, canvas.height);
-          const barWidth = (canvas.width / bufferLength) * 2.5;
-          let barHeight;
-          let x = 0;
-          for (let i = 0; i < bufferLength; i++) {
-            barHeight = dataArray[i];
-            canvasCtx.fillStyle = 'rgb(' + (barHeight + 100) + ',50,50)';
-            canvasCtx.fillRect(x, canvas.height - barHeight / 2, barWidth, barHeight / 2);
-            x += barWidth + 1;
-          }
+          const volume = dataArray.reduce((a, b) => a + b) / bufferLength;
+          volumeLevel.style.width = `${volume}%`;
         }
         draw();
       }

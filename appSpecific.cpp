@@ -124,17 +124,16 @@ bool updateAppStatus(const char* variable, const char* value, bool fromUser) {
   else if (!strcmp(variable, "micSWsPin")) micSWsPin = intVal;
   else if (!strcmp(variable, "micSdPin")) micSdPin = intVal;
   else if (!strcmp(variable, "remAudio")) {
-    LOG_INF("Remote Audio %u", intVal);
     remAudio = intVal;
     if (intVal = 0) stopAudio = true;
     else stopAudio = false;
-    LOG_INF("Remote Audio stpped %u", stopAudio);
   }
   else if (!strcmp(variable, "mampUse")) {
     mampUse = (bool)intVal;
     //micTaskStatus();
     twoWayAudioTaskStatus();
   }
+  else if (!strcmp(variable, "ampGain")) ampGain = intVal;
   else if (!strcmp(variable, "mampBckIo")) mampBckIo = intVal;
   else if (!strcmp(variable, "mampSwsIo")) mampSwsIo = intVal;
   else if (!strcmp(variable, "mampSdIo")) mampSdIo = intVal;
@@ -423,12 +422,6 @@ void buildAppJsonString(bool filter) {
   p += sprintf(p, "\"autoControl\":\"%d\",", autoControl);
   p += sprintf(p, "\"waitTime\":\"%d\",", waitTime); 
   p += sprintf(p, "\"RCactive\":\"%d\",", RCactive); 
-  p += sprintf(p, "\"maxSteerAngle\":\"%d\",", maxSteerAngle); 
-  p += sprintf(p, "\"maxDutyCycle\":\"%d\",", maxDutyCycle);
-  p += sprintf(p, "\"minDutyCycle\":\"%d\",", minDutyCycle);  
-  p += sprintf(p, "\"allowReverse\":\"%d\",", allowReverse);   
-  p += sprintf(p, "\"autoControl\":\"%d\",", autoControl);
-  p += sprintf(p, "\"waitTime\":\"%d\",", waitTime); 
   p += sprintf(p, "\"heartbeatRC\":\"%d\",", heartbeatRC); 
 #endif
   p += sprintf(p, "\"sustainId\":\"%u\",", sustainId);     
@@ -704,6 +697,7 @@ lampLevel~0~98~~na
 lenc~1~98~~na
 lswitch~20~98~~na
 micGain~0~98~~na
+ampGain~0~98~~na
 minf~5~98~~na
 motionVal~8~98~~na
 quality~12~98~~na

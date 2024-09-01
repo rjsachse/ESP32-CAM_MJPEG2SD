@@ -877,6 +877,18 @@
       .touchDisabled {
         touch-action: none;
       }
+      
+      #volumeBar {
+        width: 100px;
+        height: 50px;
+        background-color: #000000;
+      }
+
+      #volumeLevel {
+        height: 100%;
+        background-color: #b701ff;
+        width: 0;
+      }
 
     </style>
   </head>
@@ -900,14 +912,26 @@
             <li><button id="get-still" class="local" style="float:right;">Get Still</button></li>
             <li><div class="sep"></div></li>
             <li><button id="forcePlayback" class="local" style="float:right;" disabled="disabled" title="Select a video in 'Playback & File Transfers' to activate playback.">➤&nbsp;Start Playback</button></li>
-            <li><button id="remMic" class="remAudio local hidden" style="float:right;" value="1">Speak</button></li>
-            <li><button id="remSpeaker" class="remAudio local hidden" style="float:right;" value="2">Listen</button></li>
-            <li><button id="twoWayAudio" class="remAudio local hidden" style="float:right;" value="3">2 Way</button></li>
           </ul>
         </nav>
       </section>
     </div>
+    <div id="audioTab" class="tab  hidden">
+      <ul class="navtop">
+        <button id="twoWayAudio" class="remAudio local hidden" style="float:right;" value="3">🎤↔️🔊</button>
+        
 
+        <button id="remSpeaker" class="remAudio local hidden" style="float:right;" value="2">🔊</button>
+      </ul>
+    </div>
+    <div id="audioTab" class="tab  hidden">
+      <ul class="navtop">
+    <button id="remMic" class="remAudio local hidden" style="float:right;" value="1">🎤</button>
+    <div id="volumeBar">
+      <div id="volumeLevel"></div>
+    </div>
+    </ul>
+  </div>
     <div id="mainPage" class="tabcontent" style="display:block">
       <div id="content">
         <div id="mainPageIcons">
@@ -966,6 +990,10 @@
                   <div class="input-group" id="micGain-group">
                     <label for="micGain">Microphone Gain</label>
                     <input title="Set microphone gain" type="range" id="micGain" min="0" max="10" value="0">
+                  </div>
+                  <div class="input-group" id="ampGain-group">
+                    <label for="ampGain">Amplifier Gain</label>
+                    <input title="Set amplifier gain" type="range" id="ampGain" min="0" max="10" value="0">
                   </div>
                   <div class="input-group" id="CamTilt-group">
                     <label for="camTilt">Camera Tilt</label>
@@ -1701,7 +1729,9 @@
       // shorter the waitTime, more responsive RC but more load on ESP32
       let waitTime = 20;        // minimum wait in ms between controller updates
 
-
+      let haveMic = 0;
+      let haveAmp = 0;
+        
       function appInit() {
         view = $('#stream');
         viewContainer = $('#stream-container');
@@ -1765,8 +1795,9 @@
           else if (key == "showRecord") setRecIndicator(value);
           else if (key == "forcePlayback") fromUser ? playbackAction(key) : deactivatePlaybackButton();
           else if (key == "forceStream") streamAction(key);
+          else if (key == "micUse") {haveMic = Number(value); audioShow();}
+          else if (key == "mampUse") {haveAmp = Number(value); audioShow();}
           else if (key == "remAudio") remAudioAction(Number(value));
-          else if (key == "mampUse") micShow(Number(value));
           else if (key == "RCactive") RCstatus(Number(value));
           else if (key == "RClights") { value = RCbuttons(key, value); wsAuxSend(wsInd, "L" + value); }
           else if (key == "RCcontrols") showRCcontrols(RCbuttons(key, value));
@@ -1925,9 +1956,9 @@
 
       async function remAudioAction(changeState) {
         // 0 = off, 1 = microphone, 2 = speaker, 3 = twoway Audio
+        const twoWayActive = !isActive($('#twoWayAudio'));
         const micActive = !isActive($('#remMic'));
         const speakerActive = !isActive($('#remSpeaker'));
-        const twoWayActive = !isActive($('#twoWayAudio'));
         if (changeState == 1) {
           micActive ? activateMicButton() : deactivateMicButton();
           deactivateAmpButton();
@@ -1950,11 +1981,12 @@
           remAudioState(twoWayActive ? changeState : '0');
           sendControl("remAudio", twoWayActive ? '3' : '0');
         } else {
+          deactivateTwoWayButton();
           deactivateMicButton();
           deactivateAmpButton();
-          deactivateTwoWayButton();
           remAudioState(0);
           sendControl("remAudio", '0');
+          activateTwoWayButton()
         }
       } 
 
@@ -2069,49 +2101,53 @@
       function activateMicButton() {
         remMicBtn.classList.add("active");
         remMicBtn.classList.add('blinking');
-        remMicBtn.innerHTML = "Stop Talking";
+        remMicBtn.innerHTML = "🎤";
       }
 
       function deactivateMicButton() {
         remMicBtn.classList.remove("active");
         remMicBtn.classList.remove('blinking');
-        remMicBtn.innerHTML = "Start Talking";
+        remMicBtn.innerHTML ="🎤";
       }
 
       function activateAmpButton() {
         remSpeakerBtn.classList.add("active");
         remSpeakerBtn.classList.add('blinking');
-        remSpeakerBtn.innerHTML = "Stop Listening";
+        remSpeakerBtn.innerHTML = "🔇";
       }
 
       function deactivateAmpButton() {
         remSpeakerBtn.classList.remove("active");
         remSpeakerBtn.classList.remove('blinking');
-        remSpeakerBtn.innerHTML = "Start Listening";
+        remSpeakerBtn.innerHTML = "🔊";
       }
-
       function activateTwoWayButton() {
         twoWayAudioBtn.classList.add("active");
         twoWayAudioBtn.classList.add('blinking');
-        twoWayAudioBtn.innerHTML = "Stop 2 Way";
+        twoWayAudioBtn.innerHTML = "🎤❌🔇";
       }
 
       function deactivateTwoWayButton() {
         twoWayAudioBtn.classList.remove("active");
         twoWayAudioBtn.classList.remove('blinking');
-        twoWayAudioBtn.innerHTML = "Start 2 Way";
+        twoWayAudioBtn.innerHTML = "🎤↔️🔊";
       }
 
-      function micShow(doShow) {
-        if (doShow) {
-          show($('#remMic'));
-          show($('#remSpeaker'));
-          show($('#twoWayAudio'));
+      function audioShow() {
+        show($('#audioTab'));
+        if (haveMic && haveAmp) {show($('#remSpeaker')); show($('#remMic')); show($('#twoWayAudio')); }
+        else if (haveMic || haveAmp) {
+          hide($('#twoWayAudio'));
+          if (haveMic) show($('#remSpeaker'));
+          else hide($('#remSpeaker'));
+          if (haveAmp) show($('#remMic'));
+          else hide($('#remMic'));
         } else {
+          hide($('#audioTab'));
           hide($('#remMic'));
           hide($('#remSpeaker'));
           hide($('#twoWayAudio'));
-	}
+	      }
       }
 
       function showView(isFile) {

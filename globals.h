@@ -75,7 +75,7 @@
 #define RAM_LOG_LEN (1024 * 7) // size of system message log in bytes stored in slow RTC ram (max 8KB - vars)
 #define MIN_STACK_FREE 512
 #define STARTUP_FAIL "Startup Failure: "
-#define MAX_PAYLOAD_LEN 256 // set bigger than any websocket payload
+#define MAX_PAYLOAD_LEN 512 // set bigger than any websocket payload
 #define NULL_TEMP -127
 #define OneMHz 1000000
 #define USECS 1000000

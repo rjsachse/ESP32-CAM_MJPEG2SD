@@ -383,6 +383,10 @@ bool wsAsyncSend(const char* wsData) {
 void wsAsyncSendAudio(uint8_t *data, size_t len) {
   // websockets send function, used for async logging and status updates
   if (fdWs >= 0) {
+    if (data == NULL || len == 0) {
+      LOG_WRN("Invalid data or length: data=%p, len=%u", data, len);
+      return;
+    }
     // send if connection active
     //LOG_INF("websocket audio length  %u", bytesRead);
     httpd_ws_frame_t wsPkt;

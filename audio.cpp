@@ -79,6 +79,7 @@ int16_t* sampleBuffer = NULL;
 static const char* micLabels[2] = {"PDM", "I2S"};
 
 int micGain = 0;  // microphone gain 0 is off
+int ampGain = 0;  // amplifier gain 0 is off
 static bool doStreamCapture = false; 
 static size_t wsBufferLen = 0;
 static uint8_t* wsBuffer = NULL;
@@ -204,8 +205,8 @@ void remoteMicHandler(uint8_t* wsMsg, size_t wsMsgLen) {
   }
 }
 
-void applyMicRemGain() {
-  float gainFactor = (float)pow(2, micGain - MIC_GAIN_CENTER);
+void applyAmpGain() {
+  float gainFactor = (float)pow(2, ampGain - MIC_GAIN_CENTER);
   int16_t* wsPtr = (int16_t*) wsBuffer;
   for (int i = 0; i < wsBufferLen / sizeof(int16_t); i++) wsPtr[i] = constrain(wsPtr[i] * gainFactor, SHRT_MIN, SHRT_MAX);
 }
@@ -213,7 +214,7 @@ void applyMicRemGain() {
 static void ampOutputRem() {
   // output to speaker from remote mic
   static int bytesCtr = 0;
-  //applyMicRemGain();
+  //applyAmpGain();
 #ifdef ISVC
   applyFilters();
 #endif
@@ -262,7 +263,7 @@ void makeRecordingRem(bool isRecording) {
     }
     if (audioBytesUsed > psramMax) stopAudio = true; 
     else if (psramFound()) {
-      applyMicRemGain();
+      applyAmpGain();
       memcpy(audioBuffer + audioBytesUsed, wsBuffer, wsBufferLen);
       audioBytesUsed += wsBufferLen;
       wsBufferLen = 0;
@@ -468,7 +469,7 @@ static void ampRemTask(void* parameter) {
     if (remAudio > 1) {
       if (THIS_ACTION == PASS_ACTION) micInputRem();
     }
-    vTaskDelay(pdMS_TO_TICKS(1));
+    vTaskDelay(pdMS_TO_TICKS(20));
   }
 }
 

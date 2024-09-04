@@ -118,7 +118,10 @@ bool updateAppStatus(const char* variable, const char* value, bool fromUser) {
   else if (!strcmp(variable, "ds18b20Pin")) ds18b20Pin = intVal;
 #endif
 #if INCLUDE_AUDIO
-  else if (!strcmp(variable, "micUse")) micUse = (bool)intVal;
+  else if (!strcmp(variable, "micUse")) {
+    micUse = (bool)intVal;
+    remAudioTaskStatus();
+  }
   else if (!strcmp(variable, "micGain")) micGain = intVal;
   else if (!strcmp(variable, "micSckPin")) micSckPin = intVal;
   else if (!strcmp(variable, "micSWsPin")) micSWsPin = intVal;
@@ -130,8 +133,7 @@ bool updateAppStatus(const char* variable, const char* value, bool fromUser) {
   }
   else if (!strcmp(variable, "mampUse")) {
     mampUse = (bool)intVal;
-    //micTaskStatus();
-    twoWayAudioTaskStatus();
+    remAudioTaskStatus();
   }
   else if (!strcmp(variable, "ampGain")) ampGain = intVal;
   else if (!strcmp(variable, "mampBckIo")) mampBckIo = intVal;

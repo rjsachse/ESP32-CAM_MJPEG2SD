@@ -476,6 +476,7 @@
 #define PCLK_GPIO_NUM -1
 
 #define NO_SD
+
 #elif defined(CAMERA_MODEL_XENOIONEX)
 #define CAM_BOARD "CAMERA_MODEL_XENOIONEX"
 #define PWDN_GPIO_NUM    -1

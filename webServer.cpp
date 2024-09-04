@@ -388,9 +388,8 @@ void wsAsyncSendAudio(uint8_t *data, size_t len) {
       return;
     }
     // send if connection active
-    //LOG_INF("websocket audio length  %u", bytesRead);
     httpd_ws_frame_t wsPkt;
-    memset(&wsPkt, 0, sizeof(httpd_ws_frame_t));
+    memset(&wsPkt, 0, sizeof(httpd_ws_frame_t)); // Initialize all fields to zero
     wsPkt.type = HTTPD_WS_TYPE_BINARY;
     wsPkt.payload = data;
     wsPkt.len = len;

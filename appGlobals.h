@@ -43,12 +43,13 @@
   To reduce code size and heap use by removing unwanted features,
   set relevant defines below to false and optionally delete associated file
 ***************************************************************/
-#define INCLUDE_TGRAM true   // telegram.cpp
-#define INCLUDE_FTP_HFS true // ftp.cpp (file upload)
-#define INCLUDE_AUDIO true   // audio.cpp (microphone)
-#define INCLUDE_PERIPH true  // peripherals.cpp
-#define INCLUDE_SMTP true    // smtp.cpp (email)
-#define INCLUDE_MQTT true    // mqtt.cpp 
+#define INCLUDE_TGRAM true    // telegram.cpp
+#define INCLUDE_FTP_HFS true  // ftp.cpp (file upload)
+#define INCLUDE_AUDIO true    // audio.cpp (microphone)
+#define INCLUDE_REMAUDIO true // remote audio from browser audio.cpp (microphone and or amplifer)
+#define INCLUDE_PERIPH true   // peripherals.cpp
+#define INCLUDE_SMTP true     // smtp.cpp (email)
+#define INCLUDE_MQTT true     // mqtt.cpp 
 
 #define INCLUDE_CERTS true   // certificates.cpp (https and server certificate checking)
 #define INCLUDE_TELEM true   // telemetry.cpp
@@ -237,7 +238,7 @@ bool haveWavFile(bool isTL = false);
 bool isNight(uint8_t nightSwitch);
 void keepFrame(camera_fb_t* fb);
 void micTaskStatus();
-void twoWayAudioTaskStatus();
+void remAudioTaskStatus();
 void motorSpeed(int speedVal, bool leftMotor = true);
 void openSDfile(const char* streamFile);
 bool prepAudio();
@@ -338,7 +339,6 @@ extern byte* streamBuffer[]; // buffer for stream frame
 extern size_t motionJpegLen;
 extern uint8_t* motionJpeg;
 extern uint8_t* audioBuffer;
-extern uint8_t* audioWsBuffer;
 extern char srtBuffer[];
 extern size_t srtBytes;
 

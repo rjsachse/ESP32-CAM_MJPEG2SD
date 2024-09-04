@@ -37,8 +37,8 @@ i2s_port_t AMP_CHAN = I2S_NUM_0;
 
 bool micUse = false; // use local mic
 bool micRem = false; // use remote mic (depends on app)
-bool mampUse = false;
-uint8_t remAudio = 0; // use remote mic (depends on app)
+bool mampUse = false; // use local amp
+uint8_t remAudio = 0; // use remote audio browser mic and or speakers (depends on app)
 bool volatile stopAudio = false;
 
 // I2S devices
@@ -69,7 +69,6 @@ TaskHandle_t audioHandle = NULL;
 static TaskHandle_t micRemHandle = NULL;
 static TaskHandle_t ampRemHandle = NULL;
 
-uint8_t* audioWsBuffer = NULL;
 uint8_t* audioBuffer = NULL;
 static size_t audioBytesUsed = 0;
 static int totalSamples = 0;
@@ -97,6 +96,7 @@ static File wavFile;
 static bool doMicCapture = false;
 static bool captureRunning = false;
 static bool captureStream = false;
+static bool captureWsStream = false;
 #endif
 
 static uint8_t wavHeader[WAV_HDR_LEN] = { // WAV header template
@@ -159,8 +159,10 @@ static size_t micInput() {
   for (int i = 0; i < samplesRead; i++) {
     sampleBuffer[i] = constrain(sampleBuffer[i] * gainFactor, SHRT_MIN, SHRT_MAX);
   }
+  // Stream capture
   if (doStreamCapture && !audioBytesUsed) memcpy(audioBuffer, sampleBuffer, bytesRead);
-  if (remAudio > 1) memcpy(audioWsBuffer, sampleBuffer, bytesRead);
+  // WebSocket audio streaming
+  if (remAudio > 1) wsAsyncSendAudio(reinterpret_cast<uint8_t*>(sampleBuffer), bytesRead * sizeof(int16_t));
   return bytesRead;
 }
 
@@ -181,13 +183,13 @@ static void ampOutput(size_t bytesRead = sampleBytes, bool speaker = true) {
 
 size_t updateWavHeader() {
   // update wav header
-  uint32_t dataBytes = totalSamples * sampleWidth;
-  uint32_t wavFileSize = dataBytes ? dataBytes + WAV_HDR_LEN - 8 : 0; // wav file size excluding chunk header
-  memcpy(wavHeader+4, &wavFileSize, 4); ////
-  memcpy(wavHeader+24, &SAMPLE_RATE, 4); // sample rate
-  uint32_t byteRate = SAMPLE_RATE * sampleWidth; // byte rate (SampleRate * NumChannels * BitsPerSample/8)
+  uint32_t dataBytes = totalSamples * sampleWidth; // Calculate the size of the data chunk
+  uint32_t wavFileSize = dataBytes ? dataBytes + WAV_HDR_LEN - 8 : 0; // Calculate the total file size (excluding the first 8 bytes of the RIFF header)
+  memcpy(wavHeader+4, &wavFileSize, 4); // Update the file size in the header (at offset 4)
+  memcpy(wavHeader+24, &SAMPLE_RATE, 4); // Update the sample rate in the header (at offset 24)
+  uint32_t byteRate = SAMPLE_RATE * sampleWidth; // Calculate the byte rate (SampleRate * NumChannels * BitsPerSample/8)
   memcpy(wavHeader+28, &byteRate, 4); 
-  memcpy(wavHeader+WAV_HDR_LEN-4, &dataBytes, 4); // wav data size ////
+  memcpy(wavHeader+WAV_HDR_LEN-4, &dataBytes, 4); // Update the data chunk size in the header (at offset 40)
 #ifdef ISVC
   memcpy(audioBuffer, wavHeader, WAV_HDR_LEN);
 #endif
@@ -214,7 +216,7 @@ void applyAmpGain() {
 static void ampOutputRem() {
   // output to speaker from remote mic
   static int bytesCtr = 0;
-  //applyAmpGain();
+  applyAmpGain();
 #ifdef ISVC
   applyFilters();
 #endif
@@ -228,19 +230,6 @@ static void ampOutputRem() {
     bytesCtr = 0;
   }
   wsBufferLen = 0;
-}
-
-static void micInputRem() {
-  // input from mic to remote speaker
-  if (!stopAudio) {
-    if (remAudio > 1) {
-      size_t bytes_read;
-      if (!captureRunning) {
-        bytes_read = micInput();
-      }
-      wsAsyncSendAudio(audioWsBuffer, bytes_read);
-    }
-  }
 }
 
 /*********************************************************************/
@@ -391,7 +380,7 @@ size_t getAudioBuffer(bool endStream) {
       doStreamCapture = true;
       startStream = false;
     } else {
-      if (!captureRunning) {
+      if (!captureRunning || !captureWsStream) {
         captureStream = true;
         audioBytesUsed = micInput(); 
       } // otherwise already loaded by audioTask()
@@ -404,7 +393,7 @@ size_t getAudioBuffer(bool endStream) {
 static void camAudioTask() {
   // capture audio from esp microphone
   captureRunning = true;
-  while (captureStream) delay(10); // wait for stream to read mic buffer
+  while (captureStream || captureWsStream) delay(10); // wait for stream to read mic buffer
   doMicCapture = true;   
   totalSamples = 0;
   while (doMicCapture) {
@@ -433,23 +422,50 @@ void setI2Schan(int whichChan) {
 }
 
 static void predefPins() {
-#if defined(I2S_SDI)
-    char micPin[3];
-    sprintf(micPin, "%d", I2S_SDI);
-    updateStatus("micSdPin", micPin);
-    sprintf(micPin, "%d", I2S_WS);
-    updateStatus("micSWsPin", micPin);
-    sprintf(micPin, "%d", I2S_SCK);
-    updateStatus("micSckPin", micPin);
+#if defined(I2S_WS) || defined(I2S_LRC)
+  char i2sPin[3]; // Buffer size of 3 to hold pin numbers up to 99
+
+  #if defined(I2S_SDI)
+    sprintf(i2sPin, "%d", I2S_SDI);
+    updateStatus("micSdPin", i2sPin);
+    sprintf(i2sPin, "%d", I2S_WS);
+    updateStatus("micSWsPin", i2sPin);
+    sprintf(i2sPin, "%d", I2S_SCK);
+    updateStatus("micSckPin", i2sPin);
+    micUse = true;
+  #endif
+
+  #if defined(I2S_SD0)
+    sprintf(i2sPin, "%d", I2S_SDO);
+    updateStatus("mampSdIo", i2sPin);
+    mampUse = true;
+  #endif
+
+  #if defined(I2S_LRC)
+    sprintf(i2sPin, "%d", I2S_LRC);
+    updateStatus("mampSwsIo", i2sPin);
+  #else
+    sprintf(i2sPin, "%d", I2S_WS);
+    updateStatus("mampSwsIo", i2sPin);
+  #endif
+
+  #if defined(I2S_BCK)
+    sprintf(i2sPin, "%d", I2S_BCK);
+    updateStatus("mampBckIo", i2sPin);
+  #else
+    sprintf(i2sPin, "%d", I2S_SCK);
+    updateStatus("mampBckIo", i2sPin);
+  #endif
+
 #endif
 
   I2Smic = micSckPin == -1 ? false : true;
-  
+
 #ifdef CONFIG_IDF_TARGET_ESP32S3
   MIC_CHAN = I2S_NUM_0;
 #endif
-  
 }
+
 
 static void micRemTask(void* parameter) {
   while (true) {
@@ -464,40 +480,33 @@ static void micRemTask(void* parameter) {
 }
 
 static void ampRemTask(void* parameter) {
-  while (true) {
-    //ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
-    if (remAudio > 1) {
-      if (THIS_ACTION == PASS_ACTION) micInputRem();
+  while (!stopAudio && remAudio > 1) {
+    captureWsStream = false;
+    if (!captureRunning && !captureStream)  {
+      captureWsStream = true;
+      micInput();
+      captureWsStream = false;
     }
-    vTaskDelay(pdMS_TO_TICKS(20));
+    vTaskDelay(1);
   }
 }
 
-void micTaskStatus() {
-  // task to handle remote mic
-  if (mampUse) {
+void remAudioTaskStatus() {
+  // Handle mic task
+  if (micUse) {
     wsBufferLen = 0;
     if (wsBuffer == NULL) wsBuffer = (uint8_t*)malloc(MAX_PAYLOAD_LEN);
-    xTaskCreate(micRemTask, "micRemTask", MICREM_STACK_SIZE, NULL, MICREM_PRI, &micRemHandle);
-  } else if (micRemHandle != NULL) {
-    vTaskDelete(micRemHandle);
-    micRemHandle = NULL;
+    if (micRemHandle == NULL) xTaskCreate(micRemTask, "micRemTask", MICREM_STACK_SIZE, NULL, MICREM_PRI, &micRemHandle);
+  } else {
+    if (micRemHandle != NULL) { vTaskDelete(micRemHandle); micRemHandle = NULL; }
+    if (wsBuffer != NULL) { free(wsBuffer); wsBuffer = NULL; wsBufferLen = 0; }
   }
-}
-
-void twoWayAudioTaskStatus() {
-    // task to handle remote mic and amp
-    if (mampUse) {
-        wsBufferLen = 0;
-        if (wsBuffer == NULL) wsBuffer = (uint8_t*)malloc(MAX_PAYLOAD_LEN);
-        xTaskCreate(micRemTask, "micRemTask", MICREM_STACK_SIZE, NULL, MICREM_PRI, &micRemHandle);
-        xTaskCreate(ampRemTask, "ampRemTask", AMPREM_STACK_SIZE, NULL, AMPREM_PRI, &ampRemHandle);
-    } else {
-        if (micRemHandle != NULL) {
-            vTaskDelete(micRemHandle);
-            micRemHandle = NULL;
-        }
-    }
+  // Handle amp task
+  if (mampUse) {
+    if (ampRemHandle == NULL) xTaskCreate(ampRemTask, "ampRemTask", AMPREM_STACK_SIZE, NULL, AMPREM_PRI, &ampRemHandle);
+  } else {
+    if (ampRemHandle != NULL) { vTaskDelete(ampRemHandle); ampRemHandle = NULL;}
+  }
 }
 
 static void audioTask(void* parameter) {
@@ -517,7 +526,7 @@ bool prepAudio() {
   bool res = true; 
 #ifdef ISVC 
   micUse = mampUse = true;
-  micTaskStatus();
+  remAudioTaskStatus();
 #endif
 #ifdef ISCAM
   predefPins();
@@ -547,7 +556,6 @@ bool prepAudio() {
     if (micUse || mampUse) {
       if (sampleBuffer == NULL) sampleBuffer = (int16_t*)malloc(sampleBytes);
       if (audioBuffer == NULL && psramFound()) audioBuffer = (uint8_t*)ps_malloc(psramMax + (sizeof(int16_t) * DMA_BUFF_LEN));
-      if (audioWsBuffer == NULL && psramFound()) audioWsBuffer = (uint8_t*)ps_malloc(psramMax + (sizeof(int16_t) * DMA_BUFF_LEN));
       xTaskCreate(audioTask, "audioTask", AUDIO_STACK_SIZE, NULL, AUDIO_PRI, &audioHandle);
       if (micUse) LOG_INF("Sound capture is available using %s mic on I2S%i with gain %d", micLabels[I2Smic], MIC_CHAN, micGain);
       if (mampUse) LOG_INF("Speaker output is available using I2S amp on I2S%i with vol %d", AMP_CHAN, ampVol);

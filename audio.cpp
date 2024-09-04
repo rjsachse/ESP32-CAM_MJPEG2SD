@@ -439,24 +439,24 @@ static void predefPins() {
     sprintf(i2sPin, "%d", I2S_SDO);
     updateStatus("mampSdIo", i2sPin);
     mampUse = true;
-  #endif
 
-  #if defined(I2S_LRC)
-    sprintf(i2sPin, "%d", I2S_LRC);
-    updateStatus("mampSwsIo", i2sPin);
-  #else
-    sprintf(i2sPin, "%d", I2S_WS);
-    updateStatus("mampSwsIo", i2sPin);
-  #endif
+    #if defined(I2S_LRC)
+      sprintf(i2sPin, "%d", I2S_LRC);
+      updateStatus("mampSwsIo", i2sPin);
+    #else
+      sprintf(i2sPin, "%d", I2S_WS);
+      updateStatus("mampSwsIo", i2sPin);
+    #endif
+  
+    #if defined(I2S_BCK)
+      sprintf(i2sPin, "%d", I2S_BCK);
+      updateStatus("mampBckIo", i2sPin);
+    #else
+      sprintf(i2sPin, "%d", I2S_SCK);
+      updateStatus("mampBckIo", i2sPin);
+    #endif
 
-  #if defined(I2S_BCK)
-    sprintf(i2sPin, "%d", I2S_BCK);
-    updateStatus("mampBckIo", i2sPin);
-  #else
-    sprintf(i2sPin, "%d", I2S_SCK);
-    updateStatus("mampBckIo", i2sPin);
   #endif
-
 #endif
 
   I2Smic = micSckPin == -1 ? false : true;

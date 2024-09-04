@@ -162,7 +162,7 @@ static size_t micInput() {
   // Stream capture
   if (doStreamCapture && !audioBytesUsed) memcpy(audioBuffer, sampleBuffer, bytesRead);
   // WebSocket audio streaming
-  if (remAudio > 1) wsAsyncSendAudio(reinterpret_cast<uint8_t*>(sampleBuffer), bytesRead * sizeof(int16_t));
+  if (remAudio > 1) wsAsyncSendAudio(reinterpret_cast<uint8_t*>(sampleBuffer), bytesRead / sizeof(int16_t));
   return bytesRead;
 }
 
@@ -432,13 +432,13 @@ static void predefPins() {
     updateStatus("micSWsPin", i2sPin);
     sprintf(i2sPin, "%d", I2S_SCK);
     updateStatus("micSckPin", i2sPin);
-    micUse = true;
+    //micUse = true;
   #endif
 
   #if defined(I2S_SD0)
     sprintf(i2sPin, "%d", I2S_SDO);
     updateStatus("mampSdIo", i2sPin);
-    mampUse = true;
+    //mampUse = true;
 
     #if defined(I2S_LRC)
       sprintf(i2sPin, "%d", I2S_LRC);
@@ -480,12 +480,14 @@ static void micRemTask(void* parameter) {
 }
 
 static void ampRemTask(void* parameter) {
-  while (!stopAudio && remAudio > 1) {
+  while (true) {
     captureWsStream = false;
-    if (!captureRunning && !captureStream)  {
-      captureWsStream = true;
-      micInput();
-      captureWsStream = false;
+    if (!stopAudio && remAudio > 1) {
+      if (!captureRunning && !captureStream)  {
+        captureWsStream = true;
+        micInput();
+        captureWsStream = false;
+      }
     }
     vTaskDelay(1);
   }
@@ -508,6 +510,7 @@ void remAudioTaskStatus() {
     if (ampRemHandle != NULL) { vTaskDelete(ampRemHandle); ampRemHandle = NULL;}
   }
 }
+
 
 static void audioTask(void* parameter) {
   while (true) {

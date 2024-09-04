@@ -120,7 +120,9 @@ bool updateAppStatus(const char* variable, const char* value, bool fromUser) {
 #if INCLUDE_AUDIO
   else if (!strcmp(variable, "micUse")) {
     micUse = (bool)intVal;
+  #if INCLUDE_REMAUDIO
     remAudioTaskStatus();
+  #endif
   }
   else if (!strcmp(variable, "micGain")) micGain = intVal;
   else if (!strcmp(variable, "micSckPin")) micSckPin = intVal;
@@ -133,7 +135,9 @@ bool updateAppStatus(const char* variable, const char* value, bool fromUser) {
   }
   else if (!strcmp(variable, "mampUse")) {
     mampUse = (bool)intVal;
+  #if INCLUDE_REMAUDIO
     remAudioTaskStatus();
+  #endif
   }
   else if (!strcmp(variable, "ampGain")) ampGain = intVal;
   else if (!strcmp(variable, "mampBckIo")) mampBckIo = intVal;

@@ -68,7 +68,9 @@ int8_t ampVol = 3; // amplifier volume factor
 TaskHandle_t audioHandle = NULL;
 static TaskHandle_t micRemHandle = NULL;
 static TaskHandle_t ampRemHandle = NULL;
+static TaskHandle_t wsStreamingHandle = NULL; // Task handle for
 
+uint8_t* audioWsBuffer = NULL;
 uint8_t* audioBuffer = NULL;
 static size_t audioBytesUsed = 0;
 static int totalSamples = 0;
@@ -82,6 +84,9 @@ int ampGain = 0;  // amplifier gain 0 is off
 static bool doStreamCapture = false; 
 static size_t wsBufferLen = 0;
 static uint8_t* wsBuffer = NULL;
+
+// Define the queue handle
+QueueHandle_t audioWsQueue = NULL;
 
 #ifdef ISVC
 #ifdef CONFIG_IDF_TARGET_ESP32S3
@@ -162,7 +167,11 @@ static size_t micInput() {
   // Stream capture
   if (doStreamCapture && !audioBytesUsed) memcpy(audioBuffer, sampleBuffer, bytesRead);
   // WebSocket audio streaming
-  if (remAudio > 1) wsAsyncSendAudio(reinterpret_cast<uint8_t*>(sampleBuffer), bytesRead / sizeof(int16_t));
+  if (remAudio > 1) {
+    memcpy(audioWsBuffer, sampleBuffer, bytesRead);
+    xQueueSend(audioWsQueue, &bytesRead, portMAX_DELAY);
+  }
+  //if (remAudio > 1) wsAsyncSendAudio(reinterpret_cast<uint8_t*>(sampleBuffer), bytesRead);
   return bytesRead;
 }
 
@@ -493,9 +502,21 @@ static void ampRemTask(void* parameter) {
   }
 }
 
+// WebSocket streaming task
+void wsStreamingTask(void *pvParameters) {
+  size_t bytesRead;
+  while (true) {
+    // Wait for audio data from the queue
+    if (xQueueReceive(audioWsQueue, &bytesRead, portMAX_DELAY) == pdPASS) {
+      // Send audio data over WebSocket
+      wsAsyncSendAudio(audioWsBuffer, bytesRead);
+    }
+  }
+}
+
 void remAudioTaskStatus() {
   // Handle mic task
-  if (micUse) {
+  if (mampUse) {
     wsBufferLen = 0;
     if (wsBuffer == NULL) wsBuffer = (uint8_t*)malloc(MAX_PAYLOAD_LEN);
     if (micRemHandle == NULL) xTaskCreate(micRemTask, "micRemTask", MICREM_STACK_SIZE, NULL, MICREM_PRI, &micRemHandle);
@@ -504,9 +525,15 @@ void remAudioTaskStatus() {
     if (wsBuffer != NULL) { free(wsBuffer); wsBuffer = NULL; wsBufferLen = 0; }
   }
   // Handle amp task
-  if (mampUse) {
+  if (micUse) {
+    // Create the queue
+    if (audioWsQueue == NULL) audioWsQueue = xQueueCreate(10, sizeof(size_t));
+    // Create the WebSocket streaming task
+    if (wsStreamingHandle == NULL) xTaskCreate(wsStreamingTask, "WebSocket Streaming Task", WSAUDIO_STACK_SIZE, NULL, WSAUDIO_PRI, &wsStreamingHandle);
     if (ampRemHandle == NULL) xTaskCreate(ampRemTask, "ampRemTask", AMPREM_STACK_SIZE, NULL, AMPREM_PRI, &ampRemHandle);
   } else {
+    if (audioWsQueue != NULL) { vQueueDelete(audioWsQueue); audioWsQueue = NULL; }
+    if (wsStreamingHandle != NULL) { vTaskDelete(wsStreamingHandle); wsStreamingHandle = NULL;}
     if (ampRemHandle != NULL) { vTaskDelete(ampRemHandle); ampRemHandle = NULL;}
   }
 }
@@ -559,6 +586,7 @@ bool prepAudio() {
     if (micUse || mampUse) {
       if (sampleBuffer == NULL) sampleBuffer = (int16_t*)malloc(sampleBytes);
       if (audioBuffer == NULL && psramFound()) audioBuffer = (uint8_t*)ps_malloc(psramMax + (sizeof(int16_t) * DMA_BUFF_LEN));
+      if (audioWsBuffer == NULL && psramFound()) audioWsBuffer = (uint8_t*)ps_malloc(psramMax + (sizeof(int16_t) * DMA_BUFF_LEN));
       xTaskCreate(audioTask, "audioTask", AUDIO_STACK_SIZE, NULL, AUDIO_PRI, &audioHandle);
       if (micUse) LOG_INF("Sound capture is available using %s mic on I2S%i with gain %d", micLabels[I2Smic], MIC_CHAN, micGain);
       if (mampUse) LOG_INF("Speaker output is available using I2S amp on I2S%i with vol %d", AMP_CHAN, ampVol);

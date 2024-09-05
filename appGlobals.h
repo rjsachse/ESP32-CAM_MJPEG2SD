@@ -150,7 +150,7 @@
 #define TELETEMP "/current.csv"
 #define SRTTEMP "/current.srt"
 
-#define DMA_BUFF_LEN 1024 // used for I2S buffer size
+#define DMA_BUFF_LEN 512 // was 1024 used for I2S buffer size
 #define DMA_BUFF_CNT 4
 #define MIC_GAIN_CENTER 3 // mid point
 
@@ -170,6 +170,7 @@
 #define AUDIO_STACK_SIZE (1024 * 4)
 #define MICREM_STACK_SIZE (1024 * 2)
 #define AMPREM_STACK_SIZE (1024 * 2)
+#define WSAUDIO_STACK_SIZE (1024 * 2)
 #define MQTT_STACK_SIZE (1024 * 4)
 #define PING_STACK_SIZE (1024 * 5)
 #define PLAYBACK_STACK_SIZE (1024 * 2)
@@ -184,6 +185,7 @@
 #define HTTP_PRI 5
 #define MICREM_PRI 5
 #define AMPREM_PRI 5
+#define WSAUDIO_PRI 5
 #define STICK_PRI 5
 #define PLAY_PRI 4
 #define TELEM_PRI 3

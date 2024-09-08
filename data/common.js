@@ -942,9 +942,9 @@
         source.start();
 
         //visualizeSpeaker();
-        // Reset the timeout
-        clearTimeout(audioTimeout);
-        audioTimeout = setTimeout(stopAudio, TIMEOUT_DURATION);
+        return new Promise(resolve => {
+          source.onended = resolve;
+        });
 
       }
 

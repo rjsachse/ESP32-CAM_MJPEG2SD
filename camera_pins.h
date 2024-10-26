@@ -519,8 +519,8 @@
 #define PWDN_GPIO_NUM    -1
 #define RESET_GPIO_NUM   -1
 #define XCLK_GPIO_NUM    1
-#define SIOD_GPIO_NUM    47 // Can use other i2c SDA pin, set this to -1 If not using i2c set to 8
-#define SIOC_GPIO_NUM    21 // Can use other i2c SCL pin, set this to -1 If not using i2c set to 9
+#define SIOD_GPIO_NUM    8 // Can use other i2c SDA pin, set this to -1 If not using i2c set to 8
+#define SIOC_GPIO_NUM    9 // Can use other i2c SCL pin, set this to -1 If not using i2c set to 9
 
 #define Y9_GPIO_NUM      3  //D7
 #define Y8_GPIO_NUM      18 //D6
@@ -538,8 +538,8 @@
 #define SD_MMC_CMD       12
 #define SD_MMC_D0        14
 
-#define I2C_SDA          8
-#define I2C_SCL          9
+//#define I2C_SDA          8
+//#define I2C_SCL          9
 
 // I2S pins
 #define I2S_SCK          4  // Serial Clock (SCK) or Bit Clock (BCLK)

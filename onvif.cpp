@@ -1,260 +1,308 @@
+// s60sc 2020 - 2024
+// RjSachse 2024
 #include "appGlobals.h"
 #if INCLUDE_ONVIF
+#include "onvif.h"
 #include "esp_system.h" // Include for esp_random
 #include "esp_timer.h"
+#include <fcntl.h>
 
-#define MULTICAST_PORT 3702
-#define MULTICAST_IP "239.255.255.250"
-// Variables for Hello ONVIF message timing
-#define HELLO_INTERVAL 30 // 30 seconds
+// Name for varibles that can change in webserver
+char onvifManufacturer[16] = "XenoioneX";
+char onvifModel[16] = "esp32s3";
 
-std::vector<IPAddress> blockedIPs = {IPAddress(192, 168, 1, 103), IPAddress(192, 168, 1, 112)}; // List of IPs to block incoming UDP packets
-std::string ipAddress; // Hold the device IP address
-std::string deviceUUID; // Device UUID
+// Access Point MAC Address
+char apMac[18] = {0};
+char staMac[18] = {0};
 
-esp_timer_handle_t hello_timer;
-TaskHandle_t udpTaskHandle = NULL;
+// Buffer and handles
+TaskHandle_t onvifHandle = NULL;
+uint8_t* onvifBuffer = NULL;
+esp_timer_handle_t helloTimer;
 
-struct sock_params {
-  int32_t sock;
-  struct sockaddr_in addr;
+// Global Varibals
+char deviceUUID[37]; // Device UUID
+char blockedIPs[][16] = {
+  "192.168.1.103",
+  "192.168.1.112"
 };
+size_t blockedIPCount = sizeof(blockedIPs) / sizeof(blockedIPs[0]);
 
-struct sock_params params; // Global instance
+// Global udp socket and address
+int sock;
+struct sockaddr_in addr;
 
-const std::string xmlHeader = 
-  "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
-  "<s:Envelope xmlns:s=\"http://www.w3.org/2003/05/soap-envelope\" "
-  "xmlns:tt=\"http://www.onvif.org/ver10/schema\" "
-  "xmlns:tds=\"http://www.onvif.org/ver10/device/wsdl\" ";
-
-const std::string xmlFooter = "</s:Body></s:Envelope>";
-
-const std::string xmlDiscoverNS = 
-  "xmlns:enc=\"http://www.w3.org/2003/05/soap-encoding\" "
-  "xmlns:wsa=\"http://schemas.xmlsoap.org/ws/2004/08/addressing\" "
-  "xmlns:wsa5=\"http://www.w3.org/2005/08/addressing\" "
-  "xmlns:d=\"http://schemas.xmlsoap.org/ws/2005/04/discovery\" "
-  "xmlns:dn=\"http://www.onvif.org/ver10/network/wsdl\">";
-
-std::string sendProbeMatch(const std::string& probeMessageID, const std::string& messageID) {
-  return xmlHeader + xmlDiscoverNS +
-         "<s:Header>"
-         "<wsa:MessageID>uuid:" + messageID + "</wsa:MessageID>"
-         "<wsa:RelatesTo>uuid:" + probeMessageID + "</wsa:RelatesTo>"
-         "<wsa:To>http://schemas.xmlsoap.org/ws/2004/08/addressing/role/anonymous</wsa:To>"
-         "<wsa:Action>http://schemas.xmlsoap.org/ws/2005/04/discovery/ProbeMatches</wsa:Action>"
-         "</s:Header>"
-         "<s:Body>"
-         "<d:ProbeMatches>"
-         "<d:ProbeMatch>"
-         "<wsa:EndpointReference>"
-         "<wsa:Address>urn:uuid:" + deviceUUID + "</wsa:Address>"
-         "</wsa:EndpointReference>"
-         "<d:Types>dn:NetworkVideoTransmitter tds:Device</d:Types>"
-         "<d:Scopes>"
-         "onvif://www.onvif.org/location/country/china "
-         "onvif://www.onvif.org/name/" + APP_NAME + " "
-         "onvif://www.onvif.org/hardware/" + CAM_BOARD + " "
-         "onvif://www.onvif.org/type/audio_encoder "
-         "onvif://www.onvif.org/type/video_encoder "
-         "onvif://www.onvif.org/type/ptz"
-         "</d:Scopes>"
-         "<d:XAddrs>http://" + ipAddress + "/onvif/device_service</d:XAddrs>"
-         "<d:MetadataVersion>1</d:MetadataVersion>"
-         "</d:ProbeMatch>"
-         "</d:ProbeMatches>" +
-         xmlFooter;
-}
-
-std::string sendHello(const std::string& messageID) {
-  return xmlHeader + xmlDiscoverNS +
-         "<s:Header>"
-         "<wsa:MessageID>uuid:" + messageID + "</wsa:MessageID>"
-         "<wsa:To>urn:schemas-xmlsoap-org:ws:2005:04:discovery</wsa:To>"
-         "<wsa:Action>http://schemas.xmlsoap.org/ws/2005/04/discovery/Hello</wsa:Action>"
-         "</s:Header>"
-         "<s:Body>"
-         "<d:Hello>"
-         "<wsa:EndpointReference>"
-         "<wsa:Address>urn:uuid:" + deviceUUID + "</wsa:Address>"
-         "</wsa:EndpointReference>"
-         "<d:Types>dn:NetworkVideoTransmitter tds:Device</d:Types>"
-         "<d:Scopes>"
-         "onvif://www.onvif.org/location/country/australia "
-         "onvif://www.onvif.org/name/" + APP_NAME + " "
-         "onvif://www.onvif.org/hardware/" + CAM_BOARD + " "
-         "onvif://www.onvif.org/type/audio_encoder "
-         "onvif://www.onvif.org/type/video_encoder "
-         "onvif://www.onvif.org/type/ptz"
-         "</d:Scopes>"
-         "<d:XAddrs>http://" + ipAddress + "/onvif/device_service</d:XAddrs>"
-         "<d:MetadataVersion>1</d:MetadataVersion>"
-         "</d:Hello>" +
-         xmlFooter;
-}
-
-std::string sendBye(const std::string& messageID) {
-  return xmlHeader + xmlDiscoverNS +
-         "<s:Header>"
-         "<wsa:MessageID>uuid:" + messageID + "</wsa:MessageID>"
-         "<wsa:To>urn:schemas-xmlsoap-org:ws:2005:04/discovery</wsa:To>"
-         "<wsa:Action>http://schemas.xmlsoap.org/ws/2005/04/discovery/Bye</wsa:Action>"
-         "</s:Header>"
-         "<s:Body>"
-         "<d:Bye>"
-         "<wsa:EndpointReference>"
-         "<wsa:Address>urn:uuid:" + deviceUUID + "</wsa:Address>"
-         "</wsa:EndpointReference>"
-         "</d:Bye>" +
-         xmlFooter;
-}
-
-std::string extractMessageID(const std::string& packetData) {
-  size_t startIndex = packetData.find(":MessageID>");
-  if (startIndex == std::string::npos) {
+// Extract message id from incoming request
+void extractMessageID(const char* packetData, char* messageID, size_t messageIDSize) {
+  const char* startTag = "MessageID";
+  const char* startPtr = strstr(packetData, startTag);
+  if (!startPtr) {
     LOG_ERR("MessageID tag not found");
-    return ""; // Not found
+    messageID[0] = '\0'; // Not found
+    return;
   }
-  startIndex = packetData.rfind('<', startIndex); // Find the opening '<'
-  size_t closeTagStart = packetData.find(">", startIndex); // Find the closing '>'
-  if (closeTagStart == std::string::npos) {
-    LOG_ERR("MessageID close tag not found");
-    return "";
+  startPtr = strchr(startPtr, '>') + 1; // Move past '>'
+  while (*startPtr == ' ' || *startPtr == '\n' || *startPtr == '\r') { // Skip whitespace and newlines
+    startPtr++;
   }
-  startIndex = closeTagStart + 1; // Move to the end of the opening tag
-  size_t endIndex = packetData.find("</", startIndex); // Find the closing tag
-  if (startIndex != std::string::npos && endIndex != std::string::npos) {
-    std::string messageID = packetData.substr(startIndex, endIndex - startIndex);
-    // Remove 'uuid:' prefix if present
-    const std::string prefix = "uuid:";
-    if (messageID.find(prefix) == 0) {
-      messageID = messageID.substr(prefix.length());
-    }
-    return messageID;
-  } else {
+  const char* endPtr = strstr(startPtr, "</");
+  if (!endPtr) {
     LOG_ERR("MessageID end tag not found");
+    messageID[0] = '\0'; // Not found
+    return;
   }
-  return "";
+  size_t len = endPtr - startPtr;
+
+  // Debug log to see what the extracted ID is before checking length
+  //log_i("Extracted MessageID: %.*s", (int)len, startPtr);
+
+  if (len >= messageIDSize) {
+    LOG_ERR("MessageID is too long: %.*s", (int)len, startPtr);
+    messageID[0] = '\0'; // Not found
+    return;
+  }
+  strncpy(messageID, startPtr, len);
+  messageID[len] = '\0'; // Null-terminate the extracted ID
+
+  // Remove 'uuid:' prefix if present
+  const char prefix[] = "uuid:";
+  if (strncmp(messageID, prefix, strlen(prefix)) == 0) {
+    memmove(messageID, messageID + strlen(prefix), len - strlen(prefix) + 1);
+  }
 }
+
+
 
 // Generate unique UUID per message
-std::string generateUUID() {
-  char uuid[37];
-  snprintf(uuid, sizeof(uuid), "%08lx-%04x-%04x-%04x-%012llx",
+void generateUUID(char* uuid, size_t uuidSize) {
+  snprintf(uuid, uuidSize, "%08lx-%04lx-%04lx-%04lx-%012llx",
            static_cast<unsigned long>(esp_random()), esp_random() & 0xFFFF,
            (esp_random() & 0x0FFF) | 0x4000, // UUID version 4
            (esp_random() & 0x3FFF) | 0x8000, // UUID variant 1
-           ((uint64_t)esp_random() << 32) | esp_random());
-  return std::string(uuid);
+           ((unsigned long long)esp_random() << 32) | esp_random());
 }
 
 // Function to generate UUID from Chip ID
-std::string generateDeviceUUID() {
+void generateDeviceUUID(char* uuid, size_t uuidSize) {
   uint32_t chipId = ESP.getEfuseMac(); // Get the chip ID
-  char uuid[37];
-  snprintf(uuid, sizeof(uuid), "%08lx-%04x-%04x-%04x-%012lx",
+  snprintf(uuid, uuidSize, "%08lx-%04lx-%04lx-%04lx-%012lx",
            static_cast<unsigned long>((chipId >> 16) & 0xFFFF),
            static_cast<unsigned long>(chipId & 0xFFFF),
            static_cast<unsigned long>((chipId >> 16) & 0xFFFF),
            static_cast<unsigned long>(chipId & 0xFFFF),
            static_cast<unsigned long>(chipId));
-  return std::string(uuid);
+}
+
+// Populate Onvif Response from xml templates
+void populateOnvifResponse(const char* mainHeader, const char* templateStr, ...) {
+  if (onvifBuffer == NULL) {
+    LOG_ERR("ONVIF Buffer not allocated! Unable to create response, Starting Onvif");
+    startOnvif();
+  }
+
+  snprintf((char*)onvifBuffer, ONVIF_BUFFER_SIZE, "%s", mainHeader);
+
+  va_list args;
+  va_start(args, templateStr);
+  vsnprintf((char*)onvifBuffer + strlen((char*)onvifBuffer), ONVIF_BUFFER_SIZE - strlen((char*)onvifBuffer), templateStr, args);
+  va_end(args);
+
+  strncat((char*)onvifBuffer, footer, ONVIF_BUFFER_SIZE - strlen((char*)onvifBuffer) - 1);
+}
+
+// Send probe or resolve match
+void sendMatch(const char* messageID, const char* relatesToID, const char* action) {
+  const char* fullAction;
+  if (strcmp(action, "probe") == 0) {
+    fullAction = "http://schemas.xmlsoap.org/ws/2005/04/discovery/ProbeMatches";
+  } else if (strcmp(action, "resolve") == 0) {
+    fullAction = "http://schemas.xmlsoap.org/ws/2005/04/discovery/ResolveMatches";
+  } else {
+    LOG_ERR("Wrong action passed!");
+    return;
+  }
+  populateOnvifResponse(discoverNS, onvifMatch, messageID, relatesToID, fullAction,
+                        (strcmp(action, "probe") == 0 ? "ProbeMatches" : "ResolveMatches"),
+                        (strcmp(action, "probe") == 0 ? "ProbeMatch" : "ResolveMatch"),
+                        deviceUUID, APP_NAME, CAM_BOARD, ipAddress,
+                        (strcmp(action, "probe") == 0 ? "ProbeMatch" : "ResolveMatch"),
+                        (strcmp(action, "probe") == 0 ? "ProbeMatches" : "ResolveMatches"));
+}
+
+// Send hello or bye message
+void sendMessage(const char* messageType) {
+  char messageID[37];
+  generateUUID(messageID, sizeof(messageID));
+  populateOnvifResponse(discoverNS, messageType, messageID, deviceUUID, APP_NAME, CAM_BOARD, ipAddress);
+  sendto(sock, (char*)onvifBuffer, strlen((char*)onvifBuffer), 0, (const struct sockaddr*)&addr, sizeof(addr));
+  //log_i("UDP Sent Message: %s", (char*)onvifBuffer);
+}
+
+// Http endpoint onvif action responses
+void onvifServiceResponse(const char* action, const char* uri) {
+  log_i("Onvif request: %s at URI: %s", action, uri);
+
+  if (strstr(uri, "/device_service")) {
+    // Device services
+    if (strstr(action, "GetDeviceInformation")) {
+      populateOnvifResponse(deviceHeader, getDeviceInfo, onvifManufacturer, onvifModel, APP_VER, "123456", "HW123456");
+    } else if (strstr(action, "GetCapabilities")) {
+      populateOnvifResponse(maxHeader, getCapabilities, ipAddress, ipAddress, ipAddress, ipAddress, ipAddress, ipAddress, ipAddress, ipAddress, ipAddress, ipAddress, ipAddress);
+    } else if (strstr(action, "GetServices")) {
+      populateOnvifResponse(deviceHeader, getServices, ipAddress, ipAddress, ipAddress, ipAddress, ipAddress, ipAddress, ipAddress, ipAddress, ipAddress, ipAddress, ipAddress, ipAddress, ipAddress, ipAddress, ipAddress, ipAddress, ipAddress, ipAddress, ipAddress, ipAddress);
+    } else if (strstr(action, "GetScopes")) {
+      populateOnvifResponse(deviceHeader, getScopes);
+    } else if (strstr(action, "GetZeroConfiguration")) {
+      populateOnvifResponse(deviceHeader, getZeroConfig, ipAddress);
+    } else if (strstr(action, "GetNetworkInterfaces")) {
+      populateOnvifResponse(deviceHeader, getNetworkInterfaces, "24:62:AB:D5:4C:18", ipAddress);
+    } else if (strstr(action, "GetDNS")) {
+      populateOnvifResponse(deviceHeader, getDNS);
+    } else if (strstr(action, "GetSystemDateAndTime")) {
+      populateOnvifResponse(deviceHeader, getSystemDateAndTime);
+    }
+  } else if (strstr(uri, "/media_service")) {
+    // Media services
+    if (strcmp(action, "GetProfile") == 0) {
+      populateOnvifResponse(mediaHeader, getProfiles, "Profile", "Profile", "Profile", "Profile");
+    } else if (strcmp(action, "GetProfiles") == 0) {
+      populateOnvifResponse(mediaHeader, getProfiles, "Profiles", "Profiles", "Profiles", "Profiles");
+    } else if (strstr(action, "GetStreamUri")) {
+      populateOnvifResponse(mediaHeader, getStreamUri, ipAddress);
+    } else if (strstr(action, "GetSnapshotUri")) {
+      populateOnvifResponse(mediaHeader, getSnapshotUri, ipAddress);
+    } else if (strstr(action, "GetVideoSources")) {
+      populateOnvifResponse(maxHeader, getVideoSources);
+    } else if (strstr(action, "GetAudioDecoderConfigurations")) {
+      populateOnvifResponse(mediaHeader, getAudioDecoderConfigurations);
+    }
+  } else if (strstr(uri, "/ptz_service")) {
+    // PTZ services
+  } else if (strstr(uri, "/imaging_service")) {
+    // Imaging services
+    //if (strstr(action, "GetImagingSettings")) {
+    //  populateOnvifResponse(imagingHeader, getImagingSettings);
+    //}
+  } else {
+    snprintf((char*)onvifBuffer, ONVIF_BUFFER_SIZE, "UNKNOWN");
+  }
 }
 
 // Function to check if an IP address is blocked
-bool isBlocked(IPAddress ip) {
-  for (auto &blockedIP : blockedIPs) {
-    if (ip == blockedIP) {
+bool isBlocked(const char* ip) {
+  for (size_t i = 0; i < blockedIPCount; ++i) {
+    if (strcmp(ip, blockedIPs[i]) == 0) {
       return true;
     }
   }
   return false;
 }
 
-void sendHelloMessage() {
-  std::string helloMessage = sendHello(generateUUID());
-  sendto(params.sock, helloMessage.c_str(), helloMessage.length(), 0, (const struct sockaddr*)&(params.addr), sizeof(params.addr));
-  LOG_DBG("UDP", "Sent Hello Message: %s", helloMessage.c_str());
-}
-
-void sendByeMessage() {
-  std::string byeMessage = sendBye(generateUUID());
-  sendto(params.sock, byeMessage.c_str(), byeMessage.length(), 0, (const struct sockaddr*)&(params.addr), sizeof(params.addr));
-  LOG_DBG("UDP", "Sent Bye Message: %s", byeMessage.c_str());
-}
-
-void hello_timer_callback(void* arg) {
-  sendHelloMessage();
-}
-
-
-// Function to process incoming packets
+// Function to process incoming udp packets
 void process_packet(const char *packet_data, size_t len, const struct sockaddr_in *sender_addr, int sock) {
-  char sender_ip[INET_ADDRSTRLEN];
-  inet_ntop(AF_INET, &(sender_addr->sin_addr), sender_ip, INET_ADDRSTRLEN);
-  if (!isBlocked(inet_addr(sender_ip))) {
-    std::string packetData(packet_data, len);
-    if (packetData.find("Probe") != std::string::npos) {
-      std::string probeMessageID = extractMessageID(packetData);
-      std::string response = sendProbeMatch(probeMessageID, generateUUID());
-      if (response.length() <= 1444) { // 1442
-        sendto(sock, response.c_str(), response.length(), 0, (struct sockaddr *)sender_addr, sizeof(*sender_addr));
-      } else {
-        LOG_ERR("UDP", "Failed to send response packet too large");
-      }
-    }
+  if (onvifBuffer == NULL) {
+    LOG_ERR("ONVIF Buffer not allocated!");
+    return;
+  }
+  char messageID[42];
+  char relatesToID[42];
+  generateUUID(messageID, sizeof(messageID));
+  extractMessageID(packet_data, relatesToID, sizeof(relatesToID));
+  // Check for Probe
+  if (strstr(packet_data, "Probe") != NULL) {
+    sendMatch(messageID, relatesToID, "probe");
+  }
+  // Check for Resolve
+  else if (strstr(packet_data, "Resolve") != NULL) {
+    sendMatch(messageID, relatesToID, "resolve");
+  }
+  // Send response
+  if (strlen((char*)onvifBuffer) <= 4096) { // have to check max size again was 1444
+    sendto(sock, (char*)onvifBuffer, strlen((char*)onvifBuffer), 0, (struct sockaddr *)sender_addr, sizeof(*sender_addr));
   } else {
-    LOG_DBG("UDP", "Ignored packet from %s", sender_ip);
+    LOG_ERR("UDP Failed to send response packet too large");
   }
 }
 
+// Hello timer wrapper
+void sendHello(void*) {
+  sendMessage(onvifHello);
+}
+
+//Set udp to non-blocking
+void setNonBlocking(int sock) {
+  int flags = fcntl(sock, F_GETFL, 0);
+  fcntl(sock, F_SETFL, flags | O_NONBLOCK);
+}
+
 // Task to handle UDP server
-void udp_server_task(void *pvParameters) {
+void onvifTask(void *pvParameters) {
   struct sockaddr_in client_addr;
-  char recv_buffer[1024];
+  char recv_buffer[2048];
   int32_t n;
 
   // Create and configure the socket address structure
-  params.sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
-  if (params.sock < 0) {
+  sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+  if (sock < 0) {
     ESP_LOGE("UDP", "Socket creation failed: errno %d", errno);
     vTaskDelete(NULL);
     return;
   }
 
-  memset(&params.addr, 0, sizeof(params.addr));
-  params.addr.sin_family = AF_INET;
-  params.addr.sin_port = htons(MULTICAST_PORT);
-  params.addr.sin_addr.s_addr = inet_addr(MULTICAST_IP);
+  memset(&addr, 0, sizeof(addr));
+  addr.sin_family = AF_INET;
+  addr.sin_port = htons(ONVIF_PORT);
+  addr.sin_addr.s_addr = inet_addr(ONVIF_IP);
 
-  if (bind(params.sock, (struct sockaddr *)&params.addr, sizeof(params.addr)) < 0) {
-    LOG_ERR("UDP", "Socket binding failed: errno %d", errno);
-    close(params.sock);
+  if (bind(sock, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
+    LOG_ERR("UDP Socket binding failed: errno %d", errno);
+    close(sock);
     vTaskDelete(NULL);
     return;
   }
 
+  // Join multicast group
+  struct ip_mreq mreq;
+  mreq.imr_multiaddr.s_addr = inet_addr(ONVIF_IP);
+  mreq.imr_interface.s_addr = htonl(INADDR_ANY);
+  if (setsockopt(sock, IPPROTO_IP, IP_ADD_MEMBERSHIP, &mreq, sizeof(mreq)) < 0) {
+    LOG_ERR("Joining multicast group failed: errno %d", errno);
+    close(sock);
+    vTaskDelete(NULL);
+    return;
+  }
+
+  // Set the socket to non-blocking mode
+  setNonBlocking(sock);
+
   // Configure esp_timer
-  esp_timer_create_args_t timer_args = {
-    .callback = reinterpret_cast<esp_timer_cb_t>(sendHelloMessage),
+  esp_timer_create_args_t timerArgs = {
+    .callback = &sendHello,
     .arg = nullptr,
-    .name = "hello_timer"
+    .name = "helloTimer"
   };
-  esp_timer_create(&timer_args, &hello_timer);
-  esp_timer_start_periodic(hello_timer, HELLO_INTERVAL * 1000000); // Convert seconds to microseconds
+  esp_timer_create(&timerArgs, &helloTimer);
+  esp_timer_start_periodic(helloTimer, ONVIF_HELLO_INTERVAL * 1000000); // Convert seconds to microseconds
+
+  LOG_DBG("Listening on IP: %s, Port: %d", inet_ntoa(addr.sin_addr), ntohs(addr.sin_port));
 
   while (1) {
     // Handle incoming UDP packets
     socklen_t addr_len = sizeof(client_addr);
-    n = recvfrom(params.sock, recv_buffer, sizeof(recv_buffer) - 1, 0, (struct sockaddr *)&client_addr, &addr_len);
+    n = recvfrom(sock, recv_buffer, sizeof(recv_buffer) - 1, 0, (struct sockaddr *)&client_addr, &addr_len);
     if (n < 0) {
-      LOG_ERR("UDP", "Receive failed: errno %d", errno);
+      if (errno != EWOULDBLOCK) {
+        LOG_ERR("UDP Receive failed: errno %d", errno);
+      }
     } else {
-      recv_buffer[n] = '\0';
-      LOG_DBG("UDP", "Received %d bytes from %s:%d", n, inet_ntoa(client_addr.sin_addr), ntohs(client_addr.sin_port));
-      LOG_DBG("UDP", "Data: %s", recv_buffer);
-      process_packet(recv_buffer, n, &client_addr, params.sock);
+      char sender_ip[INET_ADDRSTRLEN];
+      inet_ntop(AF_INET, &(client_addr.sin_addr), sender_ip, INET_ADDRSTRLEN);
+      if (!isBlocked(sender_ip)) {
+        recv_buffer[n] = '\0';
+        //LOG_DBG("UDP Received %d bytes from %s:%d", n, inet_ntoa(client_addr.sin_addr), ntohs(client_addr.sin_port));
+        //LOG_DBG("UDP Data: %s", recv_buffer);
+        process_packet(recv_buffer, n, &client_addr, sock);
+      }
     }
   }
 
@@ -262,34 +310,63 @@ void udp_server_task(void *pvParameters) {
   vTaskDelete(NULL);
 }
 
-
 // Function to start the ONVIF service
 void startOnvif() {
-  // Set the device UUID and IP address once
-  deviceUUID = generateDeviceUUID();
-  ipAddress = WiFi.localIP().toString().c_str();
-  xTaskCreate(udp_server_task, "udp_server_task", 4096, NULL, 5, &udpTaskHandle);
+  // Set the device UUID
+  generateDeviceUUID(deviceUUID, sizeof(deviceUUID));
+
+  // Allocate buffer for ONVIF UDP and HTTP responses if PSRAM is available
+  if (psramFound()) {
+    if (onvifBuffer == NULL) {
+      onvifBuffer = (uint8_t*)ps_malloc(ONVIF_BUFFER_SIZE);
+      if (onvifBuffer == NULL) {
+        LOG_ERR("ONVIF Buffer allocation failed!");
+      }
+    }
+  } else {
+    LOG_ERR("ONVIF Buffer allocation failed! PSRAM not found");
+  }
+
+  // Allocate buffer from regular RAM if PSRAM isn't available ///// TESTING!!!
+  if (onvifBuffer == NULL) {
+    onvifBuffer = (uint8_t*)malloc(ONVIF_BUFFER_SIZE);
+    if (onvifBuffer == NULL) {
+      LOG_ERR("ONVIF Buffer allocation failed in regular RAM!");
+      return;
+    }
+  }
+// Station MAC Address
+  //esp_read_mac((uint8_t *)staMac, ESP_MAC_WIFI_STA);
+  //esp_read_mac((uint8_t *)apMac, ESP_MAC_WIFI_SOFTAP);
+
+  // Start the UDP server task
+  xTaskCreate(onvifTask, "onvifTask", ONVIF_STACK_SIZE, NULL, ONVIF_PRI, &onvifHandle);
+  LOG_INF("ONVIF Started");
 }
 
 void stopOnvif() {
-  if (udpTaskHandle != NULL) {
-    vTaskDelete(udpTaskHandle);
-    udpTaskHandle = NULL;
+  // Delete onvif task
+  if (onvifHandle != NULL) {
+    vTaskDelete(onvifHandle);
+    onvifHandle = NULL;
   }
-
-  if (hello_timer != NULL) {
-    esp_timer_stop(hello_timer);
-    esp_timer_delete(hello_timer);
-    hello_timer = NULL;
+  // Remove the onvif hello timer
+  if (helloTimer != NULL) {
+    esp_timer_stop(helloTimer);
+    esp_timer_delete(helloTimer);
+    helloTimer = NULL;
   }
-
-  if (params.sock >= 0) {
-    sendByeMessage(); // Send Bye message before closing the socket
-    close(params.sock);
-    params.sock = -1;
+  // Close udp port
+  if (sock >= 0) {
+    sendMessage(onvifBye); // Send Bye message before closing the socket
+    close(sock);
+    sock = -1;
+  }
+  // Free the buffer
+  if (onvifBuffer != NULL) {
+    free(onvifBuffer);
+    onvifBuffer = NULL;
   }
 }
 
-
 #endif
-

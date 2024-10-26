@@ -25,6 +25,7 @@
 #include "Arduino.h"
 #include <ESPmDNS.h> 
 #include "lwip/sockets.h"
+#include "lwip/inet.h"
 #include <vector>
 #include "ping/ping_sock.h"
 #include <Preferences.h>

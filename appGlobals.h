@@ -27,7 +27,7 @@
 
 // User's ESP32S3 cam board
 #elif defined(CONFIG_IDF_TARGET_ESP32S3)
-#define CAMERA_MODEL_FREENOVE_ESP32S3_CAM
+//#define CAMERA_MODEL_FREENOVE_ESP32S3_CAM
 //#define CAMERA_MODEL_XIAO_ESP32S3 
 //#define CAMERA_MODEL_NEW_ESPS3_RE1_0
 //#define CAMERA_MODEL_M5STACK_CAMS3_UNIT
@@ -37,6 +37,7 @@
 //#define CAMERA_MODEL_DFRobot_Romeo_ESP32S3
 //#define CAMERA_MODEL_XENOIONEX
 //#define AUXILIARY
+#define CAMERA_MODEL_XENOIONEX
 #endif
 
 /***************************************************************
@@ -50,11 +51,12 @@
 #define INCLUDE_SMTP false    // smtp.cpp (email)
 #define INCLUDE_MQTT false    // mqtt.cpp (MQTT)
 #define INCLUDE_HASIO false   // mqtt.cpp (Send home assistant discovery messages). Needs INCLUDE_MQTT true
+#define INCLUDE_ONVIF true    // onvif.cpp
 
 #define INCLUDE_CERTS false   // certificates.cpp (https and server certificate checking)
 #define INCLUDE_UART false    // uart.cpp (use another esp32 as Auxiliary connected via UART)
 #define INCLUDE_TELEM false   // telemetry.cpp (real time data collection). Needs INCLUDE_I2C true
-#define INCLUDE_WEBDAV false  // webDav.cpp (WebDAV protocol)
+#define INCLUDE_WEBDAV true  // webDav.cpp (WebDAV protocol)
 #define INCLUDE_EXTHB false   // externalHeartbeat.cpp (heartbeat to remote server)
 #define INCLUDE_PGRAM false   // photogram.cpp (photogrammetry feature). Needs INCLUDE_PERIPH true
 #define INCLUDE_MCPWM false   // mcpwm.cpp (BDC motor control). Needs INCLUDE_PERIPH true
@@ -118,6 +120,12 @@
 #else
 #define APP_NAME "ESP-CAM_MJPEG" // max 15 chars
 #define INDEX_PAGE_PATH DATA_DIR "/MJPEG2SD" HTML_EXT
+#endif
+#if INCLUDE_ONVIF
+#define ONVIF_PORT 3702 // Onvif Port
+#define ONVIF_IP "239.255.255.250" // Onvif listen adress
+#define ONVIF_HELLO_INTERVAL 30 // How many secounds to send a udp hello packet for onvif clients
+#define ONVIF_BUFFER_SIZE (1024 * 8) // Buffer size to hold responses in.
 #endif
 
 #define HTTP_CLIENTS 2 // http(s), ws(s)
@@ -190,6 +198,7 @@
 #define HB_STACK_SIZE (1024 * 2)
 #define UART_STACK_SIZE (1024 * 2)
 #define INTERCOM_STACK_SIZE (1024 * 2)
+#define ONVIF_STACK_SIZE (1024 * 8)
 
 // task priorities
 #define CAPTURE_PRI 6
@@ -200,6 +209,7 @@
 #define INTERCOM_PRI 5
 #define PLAY_PRI 4
 #define TELEM_PRI 3
+#define ONVIF_PRI 2
 #define TGRAM_PRI 1
 #define EMAIL_PRI 1
 #define FTP_PRI 1
@@ -297,6 +307,12 @@ size_t updateWavHeader();
 size_t writeAviIndex(byte* clientBuf, size_t buffSize, bool isTL = false);
 bool writeUart(uint8_t cmd, uint32_t outputData);
 size_t writeWavFile(byte* clientBuf, size_t buffSize);
+#if INCLUDE_ONVIF
+void startOnvif();
+void stopOnvif();
+//void onvifServiceResponse(const char* action);
+void onvifServiceResponse(const char* action, const char* uri);
+#endif
 
 /******************** Global app declarations *******************/
 
@@ -353,6 +369,7 @@ extern bool streamSnd;
 extern bool streamSrt;
 extern uint8_t numStreams;
 extern uint8_t vidStreams;
+extern char ipAddress[]; // Hold the device IP address Globaly
 
 // buffers
 extern uint8_t iSDbuffer[];
@@ -367,6 +384,7 @@ extern uint8_t* audioBuffer;
 extern size_t audioBytes;
 extern char srtBuffer[];
 extern size_t srtBytes;
+extern uint8_t* onvifBuffer; // Declare the external buffer
 
 // Auxiliary use
 extern bool useUart;
@@ -495,6 +513,7 @@ extern TaskHandle_t telegramHandle;
 extern TaskHandle_t telemetryHandle;
 extern TaskHandle_t uartRxHandle;
 extern TaskHandle_t audioHandle;
+extern TaskHandle_t onvifHandle;
 extern SemaphoreHandle_t frameSemaphore[];
 extern SemaphoreHandle_t motionSemaphore;
 

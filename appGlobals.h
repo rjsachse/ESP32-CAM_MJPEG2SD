@@ -39,7 +39,7 @@
 //#define CAMERA_MODEL_ESP32S3_CAM_LCD
 //#define CAMERA_MODEL_DFRobot_FireBeetle2_ESP32S3
 //#define CAMERA_MODEL_DFRobot_Romeo_ESP32S3
-//#define CAMERA_MODEL_XENOIONEX
+#define CAMERA_MODEL_XENOIONEX
 //#define AUXILIARY
 #define CAMERA_MODEL_XENOIONEX
 #endif
@@ -50,27 +50,27 @@
 ***************************************************************/
 #define INCLUDE_FTP_HFS false // ftp.cpp (file upload)
 #define INCLUDE_TGRAM false   // telegram.cpp (Telegram app interface)
-#define INCLUDE_AUDIO false   // audio.cpp (microphones & speakers)
-#define INCLUDE_PERIPH false  // peripherals.cpp (servos, PIR, led etc)
+#define INCLUDE_AUDIO true   // audio.cpp (microphones & speakers)
+#define INCLUDE_PERIPH true  // peripherals.cpp (servos, PIR, led etc)
 #define INCLUDE_SMTP false    // smtp.cpp (email)
 #define INCLUDE_MQTT false    // mqtt.cpp (MQTT)
 #define INCLUDE_HASIO false   // mqtt.cpp (Send home assistant discovery messages). Needs INCLUDE_MQTT true
-#define INCLUDE_ONVIF true    // onvif.cpp
 
 #define INCLUDE_CERTS false   // certificates.cpp (https and server certificate checking)
 #define INCLUDE_UART false    // uart.cpp (use another esp32 as Auxiliary connected via UART)
-#define INCLUDE_TELEM false   // telemetry.cpp (real time data collection). Needs INCLUDE_I2C true
+#define INCLUDE_TELEM true   // telemetry.cpp (real time data collection). Needs INCLUDE_I2C true
 #define INCLUDE_WEBDAV true  // webDav.cpp (WebDAV protocol)
 #define INCLUDE_EXTHB false   // externalHeartbeat.cpp (heartbeat to remote server)
 #define INCLUDE_PGRAM false   // photogram.cpp (photogrammetry feature). Needs INCLUDE_PERIPH true
 #define INCLUDE_MCPWM false   // mcpwm.cpp (BDC motor control). Needs INCLUDE_PERIPH true
-#define INCLUDE_RTSP false    // rtsp.cpp (RTSP Streaming). Requires additional library: Latest ESP32-RTSPServer (https://github.com/rjsachse/ESP32-RTSPServer)
+#define INCLUDE_RTSP true    // rtsp.cpp (RTSP Streaming). Requires additional library: Latest ESP32-RTSPServer (https://github.com/rjsachse/ESP32-RTSPServer)
+#define INCLUDE_ONVIF true    // onvif.cpp (ONVIF Streaming). Requires RTSP
 #define INCLUDE_DS18B20 false // if true, requires INCLUDE_PERIPH and additional libraries: OneWire and DallasTemperature
-#define INCLUDE_I2C false     // periphsI2C.cpp (support for I2C peripherals)
+#define INCLUDE_I2C true     // periphsI2C.cpp (support for I2C peripherals)
 
 // if INCLUDE_I2C true, set each I2C device used to true 
-#define USE_SSD1306 false
-#define USE_BMx280 false
+#define USE_SSD1306 true
+#define USE_BMx280 true
 #define USE_MPU6050 false
 #define USE_MPU9250 false
 #define USE_DS3231 false

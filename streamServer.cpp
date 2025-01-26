@@ -5,8 +5,7 @@
 // - audio streaming uses task 2
 // - subtitle streaming uses task 3
 //
-// s60sc 2022 - 2024
-//
+// s60sc 2022 - 2025
 
 #include "appGlobals.h"
 
@@ -20,8 +19,8 @@
 
 static fs::FS fpv = STORAGE;
 bool forcePlayback = false; // browser playback status
-bool streamNvr = false;
-bool streamSnd = false;
+bool streamVid = false;
+bool streamAud = false;
 bool streamSrt = false;
 static bool isStreaming[MAX_STREAMS] = {false};
 size_t streamBufferSize[MAX_STREAMS] = {0};
@@ -43,6 +42,11 @@ struct httpd_sustain_req_t {
 };
 httpd_sustain_req_t sustainReq[MAX_STREAMS];
 
+#if INCLUDE_RTSP
+static const bool includeRTSP = true;
+#else
+static const bool includeRTSP = false;
+#endif
 
 static void showPlayback(httpd_req_t* req) {
   // output playback file to browser
@@ -228,7 +232,7 @@ void stopSustainTask(int taskId) {
 }
 
 static void sustainTask(void* p) {
-  // process sustained requests as a separate task 
+  // process sustained http(s) requests as a separate task 
   while (true) {
     ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
     uint8_t i = *(uint8_t*)p; // identify task number
@@ -240,7 +244,6 @@ static void sustainTask(void* p) {
     else if (i == 1) showStream(sustainReq[i].req, i);
     else if (i == 2) audioStream(sustainReq[i].req, i);
     else if (i == 3) srtStream(sustainReq[i].req, i);
-
     // cleanup as request now complete on return
     killSocket(httpd_req_to_sockfd(sustainReq[i].req));
     delay(END_WAIT);
@@ -255,8 +258,8 @@ static void sustainTask(void* p) {
 
 void startSustainTasks() {
   // start httpd sustain tasks
-  if (streamNvr) numStreams = vidStreams = 2;
-  if (streamSnd) numStreams = 3;
+  if (streamVid) numStreams = vidStreams = 2;
+  if (streamAud) numStreams = 3;
   if (streamSrt) numStreams = 4;
   if (numStreams > MAX_STREAMS) {
     LOG_WRN("numStreams %d exceeds MAX_STREAMS %d", numStreams, MAX_STREAMS);
@@ -265,16 +268,18 @@ void startSustainTasks() {
   if (MAX_JPEG * (vidStreams + 1) > ESP.getFreePsram()) {
     LOG_WRN("Insufficient PSRAM for NVR streams");
     vidStreams = 1;
-    streamNvr = streamSnd = streamSrt = false;
+    streamVid = streamAud = streamSrt = false;
   }
   for (int i = 0; i < vidStreams; i++)
     if (streamBuffer[i] == NULL) streamBuffer[i] = (byte*)ps_malloc(MAX_JPEG); 
 
   for (int i = 0; i < numStreams; i++) {
     sustainReq[i].taskNum = i; // so task knows its number
+    if (includeRTSP && i > 0) continue; // as RTSP tasks created in rtsp.cpp
     xTaskCreate(sustainTask, "sustainTask", SUSTAIN_STACK_SIZE, &sustainReq[i].taskNum, SUSTAIN_PRI, &sustainHandle[i]); 
-  } 
-  LOG_INF("Started %d %s sustain tasks", numStreams, useHttps ? "HTTPS" : "HTTP");
+  }
+  
+  LOG_INF("Started %d sustain tasks", numStreams);
   debugMemory("startSustainTasks");
 }
 
@@ -294,7 +299,8 @@ esp_err_t appSpecificSustainHandler(httpd_req_t* req) {
       else if (!strcmp(variable, "video")) taskNum = 1;
       else if (!strcmp(variable, "audio")) taskNum = 2;
       else if (!strcmp(variable, "srt")) taskNum = 3;
-
+      // http(s) streams not available if RTSP being used
+      if (includeRTSP && taskNum > 0) taskNum = 99;
       if (taskNum < numStreams) {
         if (taskNum == 0) {
           if (req->method == HTTP_HEAD) { 
@@ -320,9 +326,11 @@ esp_err_t appSpecificSustainHandler(httpd_req_t* req) {
           }
         } else {
           // stop remote streaming if currently active
-          if (sustainReq[taskNum].inUse) {
-            isStreaming[taskNum] = false;
-            delay(END_WAIT + 100);
+          if (taskNum < MAX_STREAMS) {
+            if (sustainReq[taskNum].inUse) {
+              isStreaming[taskNum] = false;
+              delay(END_WAIT + 100);
+            }
           }
         }
             

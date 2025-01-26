@@ -5,6 +5,10 @@
 #pragma once
 #include "globals.h"
 
+#if !CONFIG_IDF_TARGET_ESP32S3 && !CONFIG_IDF_TARGET_ESP32
+#error "Must select ESP32 or ESP32S3 board"
+#endif
+
 /**************************************************************************
  Uncomment one only of the ESP32 or ESP32S3 camera models in the block below
  Selecting wrong model may crash your device due to pin conflict
@@ -60,6 +64,8 @@
 #define INCLUDE_EXTHB false   // externalHeartbeat.cpp (heartbeat to remote server)
 #define INCLUDE_PGRAM false   // photogram.cpp (photogrammetry feature). Needs INCLUDE_PERIPH true
 #define INCLUDE_MCPWM false   // mcpwm.cpp (BDC motor control). Needs INCLUDE_PERIPH true
+#define INCLUDE_RTSP false    // rtsp.cpp (RTSP Streaming). Requires additional library: Latest ESP32-RTSPServer (https://github.com/rjsachse/ESP32-RTSPServer)
+#define INCLUDE_DS18B20 false // if true, requires INCLUDE_PERIPH and additional libraries: OneWire and DallasTemperature
 #define INCLUDE_I2C false     // periphsI2C.cpp (support for I2C peripherals)
 
 // if INCLUDE_I2C true, set each I2C device used to true 
@@ -69,8 +75,6 @@
 #define USE_MPU9250 false
 #define USE_DS3231 false
 #define USE_LCD1602 false
-
-#define INCLUDE_DS18B20 false // if true, requires additional libraries: OneWire and DallasTemperature
 
 // To include Edge Impulse arduino library for additional motion detect filtering
 // Use Edge Impulse Studio to create model:
@@ -99,15 +103,14 @@
 #include "camera_pins.h"
 
 //#define DEV_ONLY // leave commented out
-#define STATIC_IP_OCTAL "132" // dev only
+#define STATIC_IP_OCTAL "133" // dev only
 #define DEBUG_MEM false // leave as false
 #define FLUSH_DELAY 0 // for debugging crashes
-#define DBG_ON false // esp debug output
+#define DBG_ON false // esp debug output (set arduino Core Debug Level accordingly)
 #define DOT_MAX 50
 #define HOSTNAME_GRP 99
-//#define REPORT_IDLE // core processor idle time monitoring
  
-#define APP_VER "10.4.2"
+#define APP_VER "10.5.4"
 
 #if defined(AUXILIARY)
 #define APP_NAME "ESP-CAM_AUX" // max 15 chars
@@ -133,7 +136,7 @@
 #define FILE_NAME_LEN 64
 #define IN_FILE_NAME_LEN (FILE_NAME_LEN * 2)
 #define JSON_BUFF_LEN (32 * 1024) // set big enough to hold all file names in a folder
-#define MAX_CONFIGS 200 // must be > number of entries in configs.txt
+#define MAX_CONFIGS 210 // must be > number of entries in configs.txt
 #define MAX_JPEG (ONEMEG / 2) // UXGA jpeg frame buffer at highest quality 375kB rounded up
 #define MIN_RAM 8 // min object size stored in ram instead of PSRAM default is 4096
 #define MAX_RAM 4096 // max object size stored in ram instead of PSRAM default is 4096
@@ -156,7 +159,7 @@
 #define ISCAM // cam specific code in generics
 
 // to determine if newer data files need to be loaded
-#define CFG_VER 23
+#define CFG_VER 26
 
 #define AVI_EXT "avi"
 #define CSV_EXT "csv"
@@ -221,7 +224,6 @@
 #define UART_PRI 1
 #define DS18B20_PRI 1
 #define BATT_PRI 1
-#define IDLEMON_PRI 5
 
 /******************** Function declarations *******************/
 
@@ -273,12 +275,11 @@ void openSDfile(const char* streamFile);
 void prepAudio();
 void prepAviIndex(bool isTL = false);
 bool prepCam();
-void prepI2Ccam(int camSda, int camScl);
-bool prepI2Cdevices();
 bool prepRecording();
 void prepTelemetry();
 void prepMic();
 void prepMotors();
+void prepRTSP();
 void prepUart();
 void setCamPan(int panVal);
 void setCamTilt(int tiltVal);
@@ -364,8 +365,8 @@ extern uint8_t xclkMhz;
 extern char camModel[];
 extern bool doKeepFrame;
 extern int alertMax; // too many could cause account suspension (daily emails)
-extern bool streamNvr;
-extern bool streamSnd;
+extern bool streamVid;
+extern bool streamAud;
 extern bool streamSrt;
 extern uint8_t numStreams;
 extern uint8_t vidStreams;
@@ -496,6 +497,21 @@ extern uint8_t numberOfPhotos;
 extern float tRPM;
 extern bool extCam;
 
+// RTSP 
+extern int quality; // Variable to hold quality for RTSP frame
+extern bool rtspVideo;
+extern bool rtspAudio;
+extern bool rtspSubtitles;
+extern int rtspPort;
+extern uint16_t rtpVideoPort;
+extern uint16_t rtpAudioPort;
+extern uint16_t rtpSubtitlesPort;
+extern char RTP_ip[];
+extern uint8_t rtspMaxClients;
+extern uint8_t rtpTTL;
+extern char rtspUser[];
+extern char rtspPassword[];
+
 // task handling
 extern TaskHandle_t battHandle;
 extern TaskHandle_t captureHandle;
@@ -530,13 +546,16 @@ struct frameStruct {
 };
 
 // indexed by frame size - needs to be consistent with sensor.h framesize_t enum
+// https://github.com/espressif/esp32-camera/blob/master/driver/include/sensor.h
 const frameStruct frameData[] = {
   {"96X96", 96, 96, 30, 1, 1},   // 2MP sensors
   {"QQVGA", 160, 120, 30, 1, 1},
+  {"128X128", 128, 128, 30, 1, 1},
   {"QCIF", 176, 144, 30, 1, 1}, 
   {"HQVGA", 240, 176, 30, 2, 1}, 
   {"240X240", 240, 240, 30, 2, 1}, 
   {"QVGA", 320, 240, 30, 2, 1}, 
+  {"320X320", 320, 320, 30, 2, 1}, 
   {"CIF", 400, 296, 30, 2, 1},  
   {"HVGA", 480, 320, 30, 2, 1}, 
   {"VGA", 640, 480, 20, 3, 1}, 
@@ -552,5 +571,6 @@ const frameStruct frameData[] = {
   {"QHD", 2560, 1440, 5, 4, 1},   // 5MP Sensors
   {"WQXGA", 2560, 1600, 5, 4, 1},
   {"P_FHD", 1080, 1920, 5, 4, 1},
-  {"QSXGA", 2560, 1920, 4, 4, 1}
+  {"QSXGA", 2560, 1920, 4, 4, 1},
+  {"5MP", 2592, 1944, 4, 4, 1}
 };

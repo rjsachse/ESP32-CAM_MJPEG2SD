@@ -9,6 +9,7 @@
 
 void setup() {
   logSetup();
+  LOG_INF("Selected board %s", CAM_BOARD);
   // prep storage
   if (startStorage()) {
     // Load saved user configuration
@@ -16,7 +17,6 @@ void setup() {
 #ifndef AUXILIARY
       // initialise camera
       if (psramFound()) {
-        LOG_INF("PSRAM size: %s", fmtSize(ESP.getPsramSize()));
         if (ESP.getPsramSize() > 3 * ONEMEG) prepCam();
         else snprintf(startupFailure, SF_LEN, STARTUP_FAIL "Insufficient PSRAM for app: %s", fmtSize(ESP.getPsramSize()));
       } else snprintf(startupFailure, SF_LEN, STARTUP_FAIL "Need PSRAM to be enabled");
@@ -65,15 +65,16 @@ void setup() {
     prepRecording(); 
 #endif
 #if INCLUDE_I2C
+  prepI2C();
   #if INCLUDE_TELEM
     prepTelemetry();
-  #else
-    prepI2Cdevices();
   #endif
 #endif
 #if INCLUDE_PERIPH
     startHeartbeat();
 #endif
+#if INCLUDE_RTSP
+    prepRTSP();
 #if INCLUDE_ONVIF
     startOnvif();
 #endif

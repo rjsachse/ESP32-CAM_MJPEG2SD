@@ -1,6 +1,6 @@
 // mjpeg2sd app specific functions
 //
-// Direct access URLs for NVR:
+// Direct access (HTTP) URLs for NVR:
 // - Video streaming: app_ip/sustain?video=1 
 // - Audio streaming: app_ip/sustain?audio=1
 // - Subtitle streaming: app_ip/sustain?srt=1
@@ -18,6 +18,7 @@ static bool depthColor = true;
 static bool devHub = false;
 char AuxIP[MAX_IP_LEN];
 bool useUart = false; 
+int quality; // Variable to hold quality for RTSP frame
 volatile audioAction THIS_ACTION = PASS_ACTION;
 static void stopRC();
 
@@ -62,10 +63,12 @@ bool updateAppStatus(const char* variable, const char* value, bool fromUser) {
   else if (!strcmp(variable, "timeLapseOn")) timeLapseOn = intVal;
   else if (!strcmp(variable, "tlSecsBetweenFrames")) tlSecsBetweenFrames = intVal;
   else if (!strcmp(variable, "tlDurationMins")) tlDurationMins = intVal;
-  else if (!strcmp(variable, "tlPlaybackFPS")) tlPlaybackFPS = intVal;  
-  else if (!strcmp(variable, "streamNvr")) streamNvr = (bool)intVal; 
-  else if (!strcmp(variable, "streamSnd")) streamSnd = (bool)intVal; 
+  else if (!strcmp(variable, "tlPlaybackFPS")) tlPlaybackFPS = intVal; 
+#if !INCLUDE_RTSP 
+  else if (!strcmp(variable, "streamVid")) streamVid = (bool)intVal; 
+  else if (!strcmp(variable, "streamAud")) streamAud = (bool)intVal; 
   else if (!strcmp(variable, "streamSrt")) streamSrt = (bool)intVal; 
+#endif
   else if (!strcmp(variable, "lswitch")) nightSwitch = intVal;
 #endif
 #if INCLUDE_FTP_HFS
@@ -226,6 +229,22 @@ bool updateAppStatus(const char* variable, const char* value, bool fromUser) {
   else if (!strcmp(variable, "uartRxdPin")) uartRxdPin = intVal;
 #endif
 
+#if INCLUDE_RTSP
+ 
+  else if (!strcmp(variable, "rtsp00User")) strncpy(rtspUser, value, MAX_IP_LEN-1);
+  else if (!strcmp(variable, "rtsp01Pass")) strncpy(rtspPassword, value, MAX_IP_LEN-1);
+  else if (!strcmp(variable, "rtsp02Video")) rtspVideo = streamVid = (bool)intVal;
+  else if (!strcmp(variable, "rtsp03Audio")) rtspAudio = streamAud = (bool)intVal;
+  else if (!strcmp(variable, "rtsp04Subtitles")) rtspSubtitles = streamSrt = (bool)intVal;
+  else if (!strcmp(variable, "rtsp05Port")) rtspPort = intVal;
+  else if (!strcmp(variable, "rtsp06VideoPort")) rtpVideoPort = intVal;
+  else if (!strcmp(variable, "rtsp07AudioPort")) rtpAudioPort = intVal;
+  else if (!strcmp(variable, "rtsp08SubtitlesPort")) rtpSubtitlesPort = intVal;
+  else if (!strcmp(variable, "rtsp09Ip")) strncpy(RTP_ip, value, MAX_IP_LEN-1);
+  else if (!strcmp(variable, "rtsp10MaxC")) rtspMaxClients = intVal;
+  else if (!strcmp(variable, "rtsp11TTL")) rtpTTL = intVal;
+#endif
+
 #ifndef AUXILIARY
   // camera settings
   else if (!strcmp(variable, "xclkMhz")) xclkMhz = intVal;
@@ -250,7 +269,10 @@ bool updateAppStatus(const char* variable, const char* value, bool fromUser) {
     if (playbackHandle != NULL) setFPS(FPS);
   }
   else if (s) {
-    if (!strcmp(variable, "quality")) res = s->set_quality(s, intVal);
+    if (!strcmp(variable, "quality")) {
+      res = s->set_quality(s, intVal);
+      quality = intVal;
+    }
     else if (!strcmp(variable, "contrast")) res = s->set_contrast(s, intVal);
     else if (!strcmp(variable, "brightness")) res = s->set_brightness(s, intVal);
     else if (!strcmp(variable, "saturation")) res = s->set_saturation(s, intVal);
@@ -501,7 +523,7 @@ void buildAppJsonString(bool filter) {
       if (cardType == CARD_MMC) p += sprintf(p, "\"card\":\"%s\",", "MMC"); 
       else if (cardType == CARD_SD) p += sprintf(p, "\"card\":\"%s\",", "SDSC");
       else if (cardType == CARD_SDHC) p += sprintf(p, "\"card\":\"%s\",", "SDHC"); 
-      else if (cardType == 99) p += sprintf(p, "\"card\":\"%s\",", "LittlrFS"); 
+      else if (cardType == 99) p += sprintf(p, "\"card\":\"%s\",", "LittleFS"); 
     }
     if ((fs::SDMMCFS*)&STORAGE == &SD_MMC) p += sprintf(p, "\"card_size\":\"%s\",", fmtSize(SD_MMC.cardSize()));
     p += sprintf(p, "\"used_bytes\":\"%s\",", fmtSize(STORAGE.usedBytes()));
@@ -584,9 +606,6 @@ bool appDataFiles() {
 
 void currentStackUsage() {
   checkStackUse(captureHandle, 0);
-#if INCLUDE_DS18B20
-  checkStackUse(DS18B20handle, 1);
-#endif
 #if INCLUDE_SMTP
   checkStackUse(emailHandle, 2);
 #endif
@@ -600,8 +619,15 @@ void currentStackUsage() {
 #endif
   // 7: pingtask
   checkStackUse(playbackHandle, 8);
+#if INCLUDE_PERIPH
+ #if INCLUDE_DS18B20
+  checkStackUse(DS18B20handle, 1);
+ #endif
   checkStackUse(servoHandle, 9);
   checkStackUse(stickHandle, 10);
+  checkStackUse(heartBeatHandle, 14);
+  checkStackUse(battHandle, 15);
+#endif
 #if INCLUDE_TGRAM
   checkStackUse(telegramHandle, 11);
 #endif
@@ -611,8 +637,8 @@ void currentStackUsage() {
 #if INCLUDE_UART
   checkStackUse(uartRxHandle, 13);
 #endif
-  // 14: http webserver
-  for (int i=0; i < numStreams; i++) checkStackUse(sustainHandle[i], 15 + i);
+  // 16: http webserver
+  for (int i=0; i < numStreams; i++) checkStackUse(sustainHandle[i], 17 + i);
 }
 
 static void stopRC() {
@@ -813,7 +839,7 @@ contrast~0~98~~na
 dcw~1~98~~na
 enableMotion~1~98~~na
 fps~20~98~~na
-framesize~9~98~~na
+framesize~11~98~~na
 gainceiling~0~98~~na
 hmirror~0~98~~na
 lampLevel~0~98~~na
@@ -870,9 +896,9 @@ detectChangeThreshold~15~1~N~Pixel difference to indicate change
 mlUse~0~1~C~Use Machine Learning
 mlProbability~0.8~1~N~ML minimum positive probability 0.0 - 1.0
 depthColor~0~1~C~Color depth for motion detection: Gray <> RGB
-streamNvr~0~1~C~Enable NVR Video stream: /sustain?video=1
-streamSnd~0~1~C~Enable NVR Audio stream: /sustain?audio=1
-streamSrt~0~1~C~Enable NVR Subtitle stream: /sustain?srt=1
+streamVid~0~8~C~Enable NVR Video stream: /sustain?video=1
+streamAud~0~8~C~Enable NVR Audio stream: /sustain?audio=1
+streamSrt~0~8~C~Enable NVR Subtitle stream: /sustain?srt=1
 smtpUse~0~2~C~Enable email sending
 smtpMaxEmails~10~2~N~Max daily alerts
 sdMinCardFreeSpace~100~2~N~Min free MBytes on SD before action
@@ -969,4 +995,16 @@ relayMode~0~3~S:Manual:Night~How relay activated
 relaySwitch~0~3~C~Switch relay off / on
 I2Csda~-1~3~N~I2C SDA pin if unshared
 I2Cscl~-1~3~N~I2C SCL pin if unshared
+rtsp00User~~8~T~RTSP Auth Username
+rtsp01Pass~~8~T~RTSP Auth Password
+rtsp02Video~1~8~C~Enable RTSP Video
+rtsp03Audio~0~8~C~Enable RTSP Audio
+rtsp04Subtitles~1~8~C~Enable RTSP Subtitles
+rtsp05Port~554~8~N~RTSP ServerPort
+rtsp06VideoPort~5430~8~N~RTSP Video Port
+rtsp07AudioPort~5432~8~N~RTSP Audio Port
+rtsp08SubtitlesPort~5434~8~N~RTSP Subtitles Port
+rtsp09Ip~239.255.0.1~8~T~RTSP Multicast IP
+rtsp10MaxC~3~8~N~RTSP Multicast Max Connections
+rtsp11TTL~1~8~N~RTSP Multicast Time-to-Live
 )~";

@@ -349,49 +349,24 @@ esp_err_t uploadHandler(httpd_req_t *req) {
   return res;
 }
 
-const char* getEncryptionType(wifi_auth_mode_t encryptionType) {
-  switch (encryptionType) {
-    case WIFI_AUTH_OPEN:
-      return "Open";
-    case WIFI_AUTH_WEP:
-      return "WEP";
-    case WIFI_AUTH_WPA_PSK:
-      return "WPA_PSK";
-    case WIFI_AUTH_WPA2_PSK:
-      return "WPA2_PSK";
-    case WIFI_AUTH_WPA_WPA2_PSK:
-      return "WPA_WPA2_PSK";
-    case WIFI_AUTH_WPA2_ENTERPRISE:
-      return "WPA2_ENTERPRISE";
-    default:
-      return "Unknown";
-  }
-}
-
-static esp_err_t wifiHandler(httpd_req_t *req) {
+static esp_err_t setupHandler(httpd_req_t *req) {
   // Scan for WiFi networks
   int w = WiFi.scanNetworks();
   // Start building the JSON string
-  String jsonString = "{\"networks\":[";
+  char* p = jsonBuff;
+  p += sprintf(p, "{\"networks\":[");
   // Populate the JSON string with scan results
   for (int i = 0; i < w; ++i) {
-    if (i > 0) {
-      jsonString += ",";
-    }
-    jsonString += "{\"ssid\":\"" + String(WiFi.SSID(i)) + "\",";
-    jsonString += "\"encryption\":\"" + String(getEncryptionType(WiFi.encryptionType(i))) + "\",";
-    jsonString += "\"strength\":" + String(WiFi.RSSI(i)) + "}";
+    p += sprintf(p, "{\"ssid\":\"%s\",\"encryption\":\"%s\",\"strength\":\"%ld\"},", WiFi.SSID(i).c_str(), getEncType(i), WiFi.RSSI(i));
   }
-  // Close the JSON array and object
-  jsonString += "]}";
-  // Set the response type to JSON
+  // remove final comma and close the JSON array
+  p += sprintf(p-1, "]}");
+  // Set the response type to JSON and send JSON
   httpd_resp_set_type(req, "application/json");
-  // Add CORS headers ONLT FOR TESTING !!!
   httpd_resp_set_hdr(req, "Access-Control-Allow-Origin", "*");
   httpd_resp_set_hdr(req, "Access-Control-Allow-Methods", "GET, POST, OPTIONS");
   httpd_resp_set_hdr(req, "Access-Control-Allow-Headers", "Content-Type");
-  // Send the JSON string as the response
-  httpd_resp_sendstr(req, jsonString.c_str());
+  httpd_resp_sendstr(req, jsonBuff);
   return ESP_OK;
 }
 

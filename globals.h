@@ -4,8 +4,8 @@
 
 #include "esp_arduino_version.h"
 
-#if ESP_ARDUINO_VERSION < ESP_ARDUINO_VERSION_VAL(3, 0, 3)
-#error Must be compiled with arduino-esp32 core v3.0.3 or higher
+#if ESP_ARDUINO_VERSION < ESP_ARDUINO_VERSION_VAL(3, 1, 1)
+#error Must be compiled with arduino-esp32 core v3.1.1 or higher
 #endif
 
 #pragma once
@@ -30,7 +30,7 @@
 #include "ping/ping_sock.h"
 #include <Preferences.h>
 #include <regex>
-#if !CONFIG_IDF_TARGET_ESP32C3
+#if (!CONFIG_IDF_TARGET_ESP32C3 && !CONFIG_IDF_TARGET_ESP32S2)
 #include <SD_MMC.h>
 #endif
 #include <LittleFS.h>
@@ -137,6 +137,7 @@ const char* getEncType(int ssidIndex);
 void getExtIP();
 time_t getEpoch();
 size_t getFreeStorage();
+uint32_t getFrequency();
 bool getLocalNTP();
 float getNTCcelsius(uint16_t resistance, float oldTemp);
 void goToSleep(int wakeupPin, bool deepSleep);
@@ -151,6 +152,7 @@ void logPrint(const char *fmtStr, ...);
 void logSetup();
 void OTAprereq();
 bool parseJson(int rxSize);
+bool prepFreq(int maxFreq, int sampleInterval);
 bool prepI2C();
 void prepPeripherals();
 void prepSMTP();
@@ -170,6 +172,7 @@ void replaceChar(char* s, char c, char r);
 void reset_log();
 void resetWatchDog();
 bool retrieveConfigVal(const char* variable, char* value);
+void runTaskStats();
 esp_err_t sendChunks(File df, httpd_req_t *req, bool endChunking = true);
 void setFolderName(const char* fname, char* fileName);
 void setPeripheralResponse(const byte pinNum, const uint32_t responseData);

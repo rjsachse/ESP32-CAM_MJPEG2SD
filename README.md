@@ -10,33 +10,36 @@ The application supports:
 * [Telemetry Recording](#telemetry-recording) during camera recording.
 * [Remote Control](#remote-control) of camera mounted vehicle.
 * Alert notification using [Telegram](#telegram-bot) or Email
-* Concurrent streaming to web browser and [remote NVR](#stream-to-nvr)
+* Concurrent streaming to web browser and [remote NVR](#stream-to-nvr) using HTTP or RTSP
 * Transfer recordings using FTP, HTTPS, [WebDAV](#webdav), or download from browser
 * [MQTT](#mqtt) control with Home Assistant integration.
 * [External Heartbeat](#external-heartbeat) support.
 * Support for peripherals: SG90 servos, MX1508 H-bridge, 28BYJ-48 stepper, HW-504 joystick, BMP280, MPU9250, MY9221 / WS2812 / SK6812 Led
-* Support for [I2C devices](#i2c-devices): BMP280, BME280, MPU6050, MPU9350, SSD1306, LCD1602, etc
+* Support for [I2C devices](#i2c-devices): BMP280, BME280, MPU6050, MPU9350, SSD1306, LCD1602, etc.
 * Interface for [Machine Learning](#machine-learning) support.
 * [Camera Hub](#camera-hub) feature to access other ESP32-CAM_MJPEG2SD devices.
 * [Photogrammetry](#photogrammetry) feature to capture photos for 3D imaging.
 * Use of [Auxiliary Board](#auxiliary-board) for additional pins.
-* [Intercom](#intercom) feature using mic and speaker on ESP and mic and speaker on user device.
+* [Intercom](#intercom) feature using mic and speaker on ESP and mic and speaker on user device browser.
 
 The ESP32 cannot support all of the features as it will run out of heap space. For better functionality and performance, use one of the new ESP32S3 camera boards, eg Freenove ESP32S3 Cam, ESP32S3 XIAO Sense, but avoid no-name boards marked `ESPS3 RE:1.0`
 
-***This is a complex app and some users are raising issues when the app reports a warning, but this is the app notifying the user that there is an problem with their setup, which only the user can fix. Be aware that some clone boards have different specs to the original, eg PSRAM size. Please only raise issues for actual bugs (ERR messages, unhandled library error or crash), or to suggest an improvement or enhancement. Thanks.*** 
+***This is a complex app and some users are raising issues when the app reports a warning, but this is the app notifying the user that there is an problem with their setup, which only the user can fix. Be aware that some clone boards have different specs to the original, eg PSRAM size. Please only raise issues for actual bugs (ERR messages, unhandled library error or crash). Thanks.  
+To suggest an improvement or enhancement use Discussions.*** 
 
-Changes in version 10.4:
-* Change to [installation](#installation) instructions for ESP32 and ESP32S3
-* Support for [I2C devices](#i2c-devices) sharing two of the camera pins
-* [Home Assistant MQTT](#home-assistant-mqtt-camera-integration) camera integration
-* Enhanced initial setup web page (contributed by [@rjsachse](https://github.com/rjsachse))
+Changes up to version 10.5.4:
+* Stream to [NVR](#stream-to-nvr) using integration to RTSPServer library contributed by [@rjsachse](https://github.com/rjsachse). 
+* RTSP server now has multiple client support as well as user/pass authentication
+* Frame resolution selection mismatch corrected due to [#10801](https://github.com/espressif/arduino-esp32/issues/10801) in arduino core v3.1.0
+* SD card 4 bit mode configurable (see `utilsFS.cpp`)
+* Shared I2C fixed following code changes in Arduino core v3.1.1
+* 24Mhz camera clock available for faster frame rate on ESP32S3, contributed by [@josef2600](https://github.com/josef2600).
 
 ## Purpose
 
 The application enables video capture of motion detection or timelapse recording. Examples include security cameras, wildlife monitoring, rocket flight monitoring, FPV vehicle control.  This [instructable](https://www.instructables.com/How-to-Make-a-WiFi-Security-Camera-ESP32-CAM-DIY-R/) by [Max Imagination](https://www.instructables.com/member/Max+Imagination/) shows how to build a WiFi Security Camera using an earlier version of this code, plus a later video on how to [install and use](https://www.youtube.com/watch?v=k_PJLkfqDuI&t=247s) the app.
 
-Saving a set of JPEGs as a single file is faster than as individual files and is easier to manage, particularly for small image sizes. Actual rate depends on quality and size of SD card and complexity and quality of images. A no-name 4GB SDHC labelled as Class 6 was 3 times slower than a genuine Sandisk 4GB SDHC Class 2. The following recording rates were achieved on a freshly formatted Sandisk 4GB SDHC Class 2 on a AI Thinker OV2640 board, set to maximum JPEG quality and highest clock rate.
+Saving a set of JPEGs as a single file is faster than as individual files and is easier to manage, particularly for small image sizes. Actual rate depends on quality and size of SD card and complexity and quality of images. A no-name 4GB SDHC labelled as Class 6 was 3 times slower than a genuine Sandisk 4GB SDHC Class 2. The following recording rates were achieved on a freshly formatted Sandisk 4GB SDHC Class 2 on a AI Thinker OV2640 board, set to maximum JPEG quality and clock rate of 20MHz. With a clock rate of 24Mhz on ESP32S3, the maximum frame rates can increase 50->60, 25->30 but it may be necessary to reduce JPEG quality.
 
 Frame Size | OV2640 camera max fps | mjpeg2sd max fps | Detection time ms
 ------------ | ------------- | ------------- | -------------
@@ -59,7 +62,7 @@ The ESP32S3 (using Freenove ESP32S3 Cam board hosting ESP32S3 N8R8 module) runs 
 
 ## Design
 
-The ESP32 Cam module has 4MB of PSRAM (8MB on most ESP32S3) which is used to buffer the camera frames and the construction of the AVI file to minimise the number of SD file writes, and optimise the writes by aligning them with the SD card sector size. For playback the AVI is read from SD into a multiple sector sized buffer, and sent to the browser as timed individual frames. The SD card is used in **MMC 1 line** mode, as this is practically as fast as **MMC 4 line** mode and frees up pin 4 (connected to onboard Lamp), and pin 12 which can be used for eg a PIR.  
+The ESP32 Cam module has 4MB of PSRAM (8MB on most ESP32S3) which is used to buffer the camera frames and the construction of the AVI file to minimise the number of SD file writes, and optimise the writes by aligning them with the SD card sector size. For playback the AVI is read from SD into a multiple sector sized buffer, and sent to the browser as timed individual frames. By dewfault the SD card is used in **MMC 1 line** mode, as this is practically as fast as **MMC 4 line** mode on the ESP32 and frees up pin 4 (connected to onboard Lamp), and pin 12 which can be used for eg a PIR. On the ESP32S3 however, tests by [@josef2600](https://github.com/josef2600) indicate that **MMC 4 line** mode provides a [doubling](https://github.com/s60sc/ESP32-CAM_MJPEG2SD/issues/529#issuecomment-2588088722) of speed.  
 
 The AVI files are named using a date time format **YYYYMMDD_HHMMSS** with added frame size, FPS recording rate, duration in secs, eg **20200130_201015_VGA_15_60.avi**, and stored in a per day folder **YYYYMMDD**. If audio is included the filename ends with **_S**.  If telemetry is available the filename ends with **_M**.  
 The ESP32 time is set from an NTP server or connected browser client.
@@ -67,7 +70,7 @@ The ESP32 time is set from an NTP server or connected browser client.
 ## Installation
 
 Download github files into the Arduino IDE sketch folder, removing `-master` from the application folder name.
-If compiling with at least arduino-esp32 core v3.0.3 which contains network fixes.
+Compile with at least arduino-esp32 core v3.1.1 which contains network fixes and frame selection changes.
 Select the required ESP-CAM board by uncommenting ONE only of the `#define CAMERA_MODEL_*` in `appGlobals.h` unless using the one of the defaults:
 * ESP32 Cam board - `CAMERA_MODEL_AI_THINKER`
 * Freenove ESP32S3 Cam board - `CAMERA_MODEL_FREENOVE_ESP32S3_CAM`  
@@ -168,14 +171,18 @@ The **Peripherals** tab also enables further config tabs to be displayed:
 
 After changes are applied, need to press `Save` then `Reboot ESP` to restart peripherals with changes.
 
-Note that there are not enough free pins on the ESP32 camera module to allow all external sensors to be used. Pins that can be used (with some limitations) are: 3, 4, 12, 13, 33.
+Note that there are not enough free pins on the ESP32 camera module to allow all external sensors to be used. Pins that can be used (with some limitations) are: 3, 4, 12, 13, 26, 27 32, 33.
 * pin 3: Labelled U0R. Only use as input pin, as also used for flashing. 
 * pin 4: Also used for onboard lamp. Lamp can be disabled by removing its current limiting resistor. 
 * pin 12: Only use as output pin.
 * pin 13: Is weakly pulled high.
+* pins 26, 27: I2C pins shareable with camera - see [I2C devices](#i2c-devices)
+* pin 32: Controls camera power on / off. Not broken out, but with electronics knowledge can be disconnected leaving camera permanently on by referring to the board schematic.
 * pin 33: Used by onboard red LED. Not broken out, but can repurpose the otherwise pointless VCC pin by removing its adjacent resistor marked 3V3, and the red LED current limiting resistor, then running a wire between the VCC pin and the red LED resistor solder tab.
 
-The ESP32S3 Freenove board can support all of the above peripherals with its spare pins.  
+Do not use any other exposed pin including pin 16 used by PSRAM.
+
+The ESP32S3 Freenove board can support multiple peripherals with its spare pins.
 The ESP32S3 XIAO Sense board has fewer free pins but more than the ESP32.
 
 On-board LEDs:
@@ -342,6 +349,9 @@ Note that some internet providers will use [CGNAT](https://en.wikipedia.org/wiki
 
 ## I2C Devices
 
+**I2C sharing not available in arduino core v3.1.1 due to camera library [issue](https://github.com/espressif/esp32-camera/issues/718). 
+Use separate I2C port.**
+
 <img align=right src="extras/I2C.jpg" width="300" height="450">
 
 Multiple I2C devices can share the same two I2C pins. As the camera also uses I2C then the other devices can either share the camera I2C pins or use a separate I2C port. The shared I2C concept was contributed by [@rjsachse](https://github.com/rjsachse). 
@@ -438,14 +448,45 @@ The IP addresses are stored in the browser local storage, not the app itself.
 
 This feature is better used on an ESP32S3 camera board due to performance and memory limitations on ESP32.
 
-Streams separate from the web browser are available for capture by a remote NVR. To enable these streams, under **Edit Config** -> **Motion** tab, select: 
+Either HTTP or RTSP can be used, but not together. RTSP is more sophisticated.
+
+Streaming performance depends on quality of network connection, but can be increased by switching off motion detection, as if a recording occurs during streaming it will take priority and the streams may stutter.
+
+#### RTSP
+
+This requires an additional library to be installed - see [RTSPServer](https://github.com/rjsachse/ESP32-RTSPServer) library for details. Must be version 1.3.0 or above
+
+To integrate library with this app, set `#define INCLUDE_RTSP` to `true`.
+
+To enable RTSP, under **Edit Config** -> **Streaming** tab, select: 
+* `Enable RTSP Video` for video stream
+* `Enable RTSP Audio` for audio stream (need to setup [microphone](#audio-recording) beforehand).
+* `Enable RTSP Subtitles` for subtitle stream (need to setup [telemetry](#telemetry-recording) beforehand, otherwise just a timestamp and FPS will be output)
+
+Then save and reboot. 
+
+To view the stream, connect to `rtsp://<camera_ip>:<RTSPport>` using app supporting RTSP.
+
+Or if authentication is enabled (username and password):
+`rtsp://<RTSPuser>:<RTSPpass>@<camera_ip>:<RTSPport>`
+
+RTSP now supports multiple clients for multicast. You can also override this logic and enable multiple clients for all transports (TCP, UDP, Multicast) by commenting out //#define OVERRIDE_RTSP_SINGLE_CLIENT_MODE in rtsp.cpp. 
+However, enabling multiple clients for all transports can slow the stream down and may cause issues, so use with care. It is better to leave it for only one client if using TCP or UDP unicast for best results. For more details, 
+check out the README in the RTSPServer library.
+
+#### HTTP
+
+HTPP streaming is available if `#define INCLUDE_RTSP` is set to `false`.
+
+Streams separate from the web browser are available for capture by a remote NVR. To enable these streams, under **Edit Config** -> **Streaming** tab, select: 
 * `Enable Video stream on /sustain?video=1` for MJPEG stream
 * `Enable Audio stream on /sustain?audio=1` for WAV stream (need to setup [microphone](#audio-recording) beforehand).
 * `Enable Subtitle stream on /sustain?srt=1` for SRT stream (need to setup [telemetry](#telemetry-recording) beforehand, otherwise just a timestamp will be output).
 
 Then save and reboot. 
 
-If multiple streams are enabled they need to be processed by an intermediate tool for synchronisation, eg [go2rtc](https://github.com/AlexxIT/go2rtc) (but which does not handle subtitles [yet?](https://github.com/AlexxIT/go2rtc/issues/932)). See [ESP32-CAM_Audio](https://github.com/spawn451/ESP32-CAM_Audio#usage) for go2rtc configuration examples. If a recording occurs during streaming it will take priority and the streams may stutter.
+If multiple streams are enabled they need to be processed by an intermediate tool for synchronisation, eg [go2rtc](https://github.com/AlexxIT/go2rtc) (but which does not handle subtitles [yet?](https://github.com/AlexxIT/go2rtc/issues/932)). See [ESP32-CAM_Audio](https://github.com/spawn451/ESP32-CAM_Audio#usage) for go2rtc configuration examples. 
+
 
 ## WebDAV
 

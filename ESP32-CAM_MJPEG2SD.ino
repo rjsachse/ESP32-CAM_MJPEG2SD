@@ -75,6 +75,8 @@ void setup() {
 #endif
 #if INCLUDE_RTSP
     prepRTSP();
+#if INCLUDE_ONVIF
+    startOnvif();
 #endif
     checkMemory();
   } 

@@ -18,10 +18,11 @@ bool dataFilesChecked = false;
 // allow any startup failures to be reported via browser for remote devices
 char startupFailure[SF_LEN] = {0};
 size_t alertBufferSize = 0;
-byte* alertBuffer = NULL; // buffer for telegram / smtp alert image
+byte* alertBuffer = NULL;  // buffer for telegram / smtp alert image
 RTC_NOINIT_ATTR uint32_t crashLoop;
 RTC_NOINIT_ATTR char brownoutStatus;
 static void initBrownout(void);
+
 int wakePin; // if wakeUse is true
 bool wakeUse = false; // true to allow app to sleep and wake
 char* jsonBuff = NULL;
@@ -74,7 +75,19 @@ static void setupMdnsHost() {
     MDNS.addService("http", "tcp", HTTP_PORT);
     MDNS.addService("https", "tcp", HTTPS_PORT);
     //MDNS.addService("ws", "udp", 83);
-    //MDNS.addService("ftp", "tcp", 21);    
+    //MDNS.addService("ftp", "tcp", 21);   
+#if INCLUDE_ONVIF
+    // Add ONVIF-related services
+    MDNS.addServiceTxt("onvif", "tcp", "path", "/onvif/device_service");
+
+    // Add MJPEG stream service
+    //MDNS.addService("http", "tcp", MJPEG_STREAM_PORT); // Use the port your MJPEG stream is available on
+    //MDNS.addServiceTxt("http", "tcp", "path", "/mjpeg_stream"); // Add the path to your MJPEG stream
+
+    // Add UDP service for discovery
+    MDNS.addService("wsdd", "udp", ONVIF_PORT); // Use your multicast port for UDP
+
+ #endif
     LOG_INF("mDNS service: http://%s.local", mdnsName);
   } else LOG_WRN("mDNS host: %s Failed", mdnsName);
   debugMemory("setupMdnsHost");
@@ -129,7 +142,14 @@ static void onWiFiEvent(WiFiEvent_t event) {
       }
       break;
     }
-    case ARDUINO_EVENT_WIFI_STA_GOT_IP: LOG_INF("Wifi Station IP, use '%s://%s' to connect", useHttps ? "https" : "http", WiFi.localIP().toString().c_str()); break;
+    case ARDUINO_EVENT_WIFI_STA_GOT_IP: {
+      // Set the IP address for global use
+      strncpy(ipAddress, WiFi.localIP().toString().c_str(), sizeof(ipAddress) - 1);
+      ipAddress[sizeof(ipAddress) - 1] = '\0'; // Ensure null-termination
+      LOG_INF("Wifi Station IP, use '%s://%s' to connect", useHttps ? "https" : "http", ipAddress);
+      break;
+    }
+
     case ARDUINO_EVENT_WIFI_STA_LOST_IP: LOG_INF("Wifi Station lost IP"); break;
     case ARDUINO_EVENT_WIFI_AP_STAIPASSIGNED: break;
     case ARDUINO_EVENT_WIFI_STA_CONNECTED: LOG_INF("WiFi Station connection to %s, using hostname: %s", ST_SSID, hostName); break;

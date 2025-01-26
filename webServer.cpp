@@ -482,6 +482,67 @@ static void https_server_user_callback(esp_https_server_user_cb_arg_t *user_cb) 
 }
 */
 
+#if INCLUDE_ONVIF
+esp_err_t onvifHandler(httpd_req_t *req) {
+  uint8_t buf[100] = {0};
+  esp_err_t ret;
+  uint8_t content[1000] = {0};
+  int received = httpd_req_recv(req, (char *)content, sizeof(content) - 1);
+  if (received <= 0) {
+    if (ret == HTTPD_SOCK_ERR_TIMEOUT) {
+      httpd_resp_send_408(req);
+    } else {
+      httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Failed to receive request body");
+    }
+    return ESP_FAIL;
+  }
+  content[received] = '\0'; // Null-terminate the received content
+
+  // Extract action from XML body
+  char* body_start = strstr((char*)content, "<s:Body");
+  if (body_start) {
+    // Move to end of <s:Body ...>
+    body_start = strchr(body_start, '>');
+    if (body_start) {
+      body_start++; // Move past '>'
+      char* action_start = strstr(body_start, "<");
+      if (action_start) {
+        action_start++;
+        char* action_end = strchr(action_start, ' ');
+        if (!action_end) {
+          action_end = strchr(action_start, '>');
+        }
+        if (action_end) {
+          size_t action_len = action_end - action_start;
+          strncpy((char *)buf, action_start, action_len);
+          buf[action_len] = '\0';
+        }
+      }
+    }
+  }
+
+  // Extract URI to determine the specific service being requested
+  const char* uri = req->uri;
+
+  // Generate response using the action in buffer and the specific service URI
+  onvifServiceResponse((char*)buf, uri);
+  if (strcmp((char*)onvifBuffer, "UNKNOWN") == 0) {
+    LOG_ERR("Unknown ONVIF Action: %s at URI: %s", buf, uri);
+    httpd_resp_send_404(req);
+    return ESP_FAIL;
+  }
+
+  // Set the correct Content-Type header
+  //log_i("Full Response: %s", (char*)onvifBuffer);
+  httpd_resp_set_type(req, "application/soap+xml; charset=utf-8");
+  httpd_resp_send(req, (char*)onvifBuffer, HTTPD_RESP_USE_STRLEN);
+
+  return ESP_OK;
+}
+
+
+#endif
+
 static esp_err_t customOrNotFoundHandler(httpd_req_t *req, httpd_err_code_t err) {
   // either handle WebDAV methods or report non existent URI
   if (req->method == HTTP_OPTIONS) sendCrossOriginHeader(req);
@@ -520,7 +581,7 @@ void startWebServer() {
     config.httpd.max_uri_handlers = MAX_HANDLERS;
     config.httpd.max_open_sockets = HTTP_CLIENTS + MAX_STREAMS;
     config.httpd.task_priority = HTTP_PRI;
-    //config.httpd.uri_match_fn = httpd_uri_match_wildcard;
+    config.httpd.uri_match_fn = httpd_uri_match_wildcard;
     res = httpd_ssl_start(&httpServer, &config);
   } else {
 #endif
@@ -535,7 +596,7 @@ void startWebServer() {
     config.max_uri_handlers = MAX_HANDLERS;
     config.max_open_sockets = HTTP_CLIENTS + MAX_STREAMS;
     config.task_priority = HTTP_PRI;
-    //config.uri_match_fn = httpd_uri_match_wildcard;
+    config.uri_match_fn = httpd_uri_match_wildcard;
     res = httpd_start(&httpServer, &config);
 #if INCLUDE_CERTS
   }
@@ -550,7 +611,10 @@ void startWebServer() {
   httpd_uri_t uploadUri = {.uri = "/upload", .method = HTTP_POST, .handler = uploadHandler, .user_ctx = NULL};
   httpd_uri_t sustainUri = {.uri = "/sustain", .method = HTTP_GET, .handler = appSpecificSustainHandler, .user_ctx = NULL};
   httpd_uri_t checkUri = {.uri = "/sustain", .method = HTTP_HEAD, .handler = appSpecificSustainHandler, .user_ctx = NULL};
-  httpd_uri_t wifiUri = {.uri = "/wifi", .method = HTTP_GET, .handler = setupHandler, .user_ctx = NULL};
+  httpd_uri_t wifiUri = {.uri = "/wifi", .method = HTTP_GET, .handler = wifiHandler, .user_ctx = NULL};
+#if  INCLUDE_ONVIF
+  httpd_uri_t onvifUri = {.uri = "/onvif/*", .method = HTTP_POST, .handler = onvifHandler, .user_ctx = NULL}; // Using wildcard to return all endpoints
+#endif
 
   if (res == ESP_OK) {
     httpd_register_uri_handler(httpServer, &indexUri);
@@ -564,6 +628,9 @@ void startWebServer() {
     httpd_register_uri_handler(httpServer, &checkUri);
     httpd_register_uri_handler(httpServer, &wifiUri);
     httpd_register_err_handler(httpServer, HTTPD_404_NOT_FOUND, customOrNotFoundHandler);
+#if INCLUDE_ONVIF
+    httpd_register_uri_handler(httpServer, &onvifUri);
+#endif
 
     LOG_INF("Starting web server on port: %u", useHttps ? HTTPS_PORT : HTTP_PORT);
     LOG_INF("Remote server certificates %s checked", useSecure ? "are" : "not");

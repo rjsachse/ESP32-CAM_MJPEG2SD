@@ -873,7 +873,7 @@ bool prepCam() {
   if (FRAMESIZE_INVALID != sizeof(frameData) / sizeof(frameData[0])) 
     LOG_ERR("framesize_t entries %d != frameData entries %d", FRAMESIZE_INVALID, sizeof(frameData) / sizeof(frameData[0]));
   if (!camPower()) return false;
-  
+  prepI2C();
   bool res = false;
   // buffer sizing depends on psram size (4M or 8M)
   // FRAMESIZE_QSXGA = 1MB, FRAMESIZE_UXGA = 375KB (as JPEG)

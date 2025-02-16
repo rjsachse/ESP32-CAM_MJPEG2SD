@@ -459,8 +459,8 @@
 #define PWDN_GPIO_NUM    -1
 #define RESET_GPIO_NUM   -1
 #define XCLK_GPIO_NUM    1 // Can use 
-#define SIOD_GPIO_NUM    8 // Can use other i2c SDA pin, set this to -1 | If not using i2c set to 8 or 47
-#define SIOC_GPIO_NUM    9 // Can use other i2c SCL pin, set this to -1 | If not using i2c set to 9 or 21
+#define SIOD_GPIO_NUM    -1 // Can use other i2c SDA pin, set this to -1 | If not using i2c set to 8 or 47
+#define SIOC_GPIO_NUM    -1 // Can use other i2c SCL pin, set this to -1 | If not using i2c set to 9 or 21
 
 #define Y9_GPIO_NUM      3  //D7
 #define Y8_GPIO_NUM      18 //D6
@@ -485,6 +485,9 @@
 #define I2S_SDO          7  // Serial Data Out (Amp)
 //#define I2S_BCK          3  // Bit Clock (BCLK) !!! Not needed as of Core V3
 //#define I2S_LRC          11  // Left Right Clcok (LRCLK) !!! Not needed as of Core V3
+
+#define I2C_SDA    8 // Can use other i2c SDA pin, set this to -1 | If not using i2c set to 8 or 47
+#define I2C_SCL    9 // Can use other i2c SCL pin, set this to -1 | If not using i2c set to 9 or 21
 
 #define TRIGGER         15 // TRIGER FROM PIR OR RADAR
 

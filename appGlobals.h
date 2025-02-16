@@ -31,7 +31,7 @@
 
 // User's ESP32S3 cam board
 #elif defined(CONFIG_IDF_TARGET_ESP32S3)
-#define CAMERA_MODEL_FREENOVE_ESP32S3_CAM
+//#define CAMERA_MODEL_FREENOVE_ESP32S3_CAM
 //#define CAMERA_MODEL_XIAO_ESP32S3 
 //#define CAMERA_MODEL_NEW_ESPS3_RE1_0
 //#define CAMERA_MODEL_M5STACK_CAMS3_UNIT
@@ -39,7 +39,7 @@
 //#define CAMERA_MODEL_ESP32S3_CAM_LCD
 //#define CAMERA_MODEL_DFRobot_FireBeetle2_ESP32S3
 //#define CAMERA_MODEL_DFRobot_Romeo_ESP32S3
-//#define CAMERA_MODEL_XENOIONEX
+#define CAMERA_MODEL_XENOIONEX
 //#define AUXILIARY
 #endif
 
@@ -49,8 +49,8 @@
 ***************************************************************/
 #define INCLUDE_FTP_HFS false // ftp.cpp (file upload)
 #define INCLUDE_TGRAM false   // telegram.cpp (Telegram app interface)
-#define INCLUDE_AUDIO false   // audio.cpp (microphones & speakers)
-#define INCLUDE_PERIPH false  // peripherals.cpp (servos, PIR, led etc)
+#define INCLUDE_AUDIO true   // audio.cpp (microphones & speakers)
+#define INCLUDE_PERIPH true  // peripherals.cpp (servos, PIR, led etc)
 #define INCLUDE_SMTP false    // smtp.cpp (email)
 #define INCLUDE_MQTT false    // mqtt.cpp (MQTT)
 #define INCLUDE_HASIO false   // mqtt.cpp (Send home assistant discovery messages). Needs INCLUDE_MQTT true
@@ -58,17 +58,18 @@
 #define INCLUDE_CERTS false   // certificates.cpp (https and server certificate checking)
 #define INCLUDE_UART false    // uart.cpp (use another esp32 as Auxiliary connected via UART)
 #define INCLUDE_TELEM false   // telemetry.cpp (real time data collection). Needs INCLUDE_I2C true
-#define INCLUDE_WEBDAV false  // webDav.cpp (WebDAV protocol)
+#define INCLUDE_WEBDAV true  // webDav.cpp (WebDAV protocol)
 #define INCLUDE_EXTHB false   // externalHeartbeat.cpp (heartbeat to remote server)
 #define INCLUDE_PGRAM false   // photogram.cpp (photogrammetry feature). Needs INCLUDE_PERIPH true
 #define INCLUDE_MCPWM false   // mcpwm.cpp (BDC motor control). Needs INCLUDE_PERIPH true
-#define INCLUDE_RTSP false    // rtsp.cpp (RTSP Streaming). Requires additional library: Latest ESP32-RTSPServer (https://github.com/rjsachse/ESP32-RTSPServer)
+#define INCLUDE_RTSP true    // rtsp.cpp (RTSP Streaming). Requires additional library: Latest ESP32-RTSPServer (https://github.com/rjsachse/ESP32-RTSPServer)
+#define INCLUDE_ONVIF true   // onvif.cpp must have rtsp
 #define INCLUDE_DS18B20 false // if true, requires INCLUDE_PERIPH and additional libraries: OneWire and DallasTemperature
-#define INCLUDE_I2C false     // periphsI2C.cpp (support for I2C peripherals)
+#define INCLUDE_I2C true     // periphsI2C.cpp (support for I2C peripherals)
 
 // if INCLUDE_I2C true, set each I2C device used to true 
-#define USE_SSD1306 false
-#define USE_BMx280 false
+#define USE_SSD1306 true
+#define USE_BMx280 true
 #define USE_MPU6050 false
 #define USE_MPU9250 false
 #define USE_DS3231 false
@@ -193,6 +194,7 @@
 #define HB_STACK_SIZE (1024 * 2)
 #define UART_STACK_SIZE (1024 * 2)
 #define INTERCOM_STACK_SIZE (1024 * 2)
+#define ONVIF_STACK_SIZE (1024 * 8)
 
 // task priorities
 #define CAPTURE_PRI 6
@@ -214,6 +216,7 @@
 #define UART_PRI 1
 #define DS18B20_PRI 1
 #define BATT_PRI 1
+#define ONVIF_PRI 1
 
 /******************** Function declarations *******************/
 
@@ -298,6 +301,9 @@ size_t updateWavHeader();
 size_t writeAviIndex(byte* clientBuf, size_t buffSize, bool isTL = false);
 bool writeUart(uint8_t cmd, uint32_t outputData);
 size_t writeWavFile(byte* clientBuf, size_t buffSize);
+void startOnvif();
+void stopOnvif();
+void onvifServiceResponse(const char* action, const char* uri, const char* requestBody);
 
 /******************** Global app declarations *******************/
 
@@ -368,6 +374,7 @@ extern uint8_t* audioBuffer;
 extern size_t audioBytes;
 extern char srtBuffer[];
 extern size_t srtBytes;
+extern uint8_t* onvifBuffer; // Declare the external onvif buffer
 
 // Auxiliary use
 extern bool useUart;
@@ -511,6 +518,7 @@ extern TaskHandle_t telegramHandle;
 extern TaskHandle_t telemetryHandle;
 extern TaskHandle_t uartRxHandle;
 extern TaskHandle_t audioHandle;
+extern TaskHandle_t onvifHandle;
 extern SemaphoreHandle_t frameSemaphore[];
 extern SemaphoreHandle_t motionSemaphore;
 
